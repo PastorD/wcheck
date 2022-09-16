@@ -1,6 +1,6 @@
 # Workspace Check (wcheck)
 
-Compares different versions of git respositories and reports their differences. Possible options of workspace:
+Compares different versions of git repositories and reports their differences. Possible options of workspace:
 - local workspace in a directory, represented by the current git branch of each repository
 - workspace defined by a vcs file
 
