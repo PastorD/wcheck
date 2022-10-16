@@ -5,7 +5,7 @@ Compares different versions of git repositories and reports their differences. P
 - workspace defined by a vcs file
 
 Possible comparisions:
-- compare local workspace against a configuration file (command=local2config)
+- compare local workspace against a configuration file (command=wconfig)
 - compare two configuration files, e.g. robot_A.vcs with robot_B.vcs (command=config_list)
 - compare all git references of a configurion file, this includes all active branches and tags (command=config_versions)
 
@@ -14,54 +14,58 @@ Possible comparisions:
 
 General usage
 ```bash
-wcheck [-w <workspace_location>] [-h] [--full] [--gui] [-v] [--show-time] [--references] [--full-path] [<config> .. <config>]
+wcheck <command> <parameters>
 ```
+Command options: status, wconfig, config_list, config_versions
 
 Check workspace status
 ```bash
-wcheck [-w <workspace_location>] 
+wcheck status [-w <workspace_location>] [--full] [--gui] [-v] [--show-time] 
 ```
+It will show the git status of each repository. The legend is U: number of untracked files, C: number of changed files, S: number of staged files, arrow up: number of commits to push, arrow down: number of commits to pull.
+
 Workspace location can be specified with argument _-w_, if not provided, it will use current location. 
 
 Compare workspace to a configuration file:
 ```bash
-wcheck <config_file>
+wcheck wconfig -c <config_file> [--gui] [-v] [--show-time]
 ```
 The configuration file uses VCSTOOL structure, see an overview below
 
 Compare multiple configuration files
 ```bash
-wcheck <config_A> <config_B> .. <config_N>
+wcheck config_list -c <config_A> <config_B> .. <config_N>
 ```
 
-Compare git references, branches and tags, of the configuration file
+Compare git references (branches and tags), of the configuration file
 ```bash
-wcheck --references <config> 
+wcheck config_versions -c <config> [-h] [--full] [-v] [--show-time] [--full-path]
 ```
 
 Optional arguments
 ```
   -v --verbose: verbose output
-  -h --help: show \help
+  -h --help: show help
   --full: show full output, not only differences
+  --gui: show graphical user interface
   --show-time: show elapsed time since last commit and reference creation
   --fetch: fetch repositories before comparing
+  --full-path: show full path for each configuration file
 ```
 
 ## VCSTOOL Overview
 
-This repo is based on vcstool (do not confuse with [vctools](https://github.com/vcstools/vcstools/), a similar but deprecated tool for working with vcs files). A workspace is defined with a yaml file describing each repository:
-Workspace definition
+This repo is based on vcstool (do not confuse with [vctools](https://github.com/vcstools/vcstools/), a similar but deprecated tool for working with vcs files). A workspace is defined with a yaml file describing each repository
 
 ```yaml
   repositories:
     <repo directory name>:
-      type: <>
+      type: <repo type>
       url: <repo url>
-      version: master
+      version: <repo version>
 ```
 
-where *repo directory name* is the name of the directory where the repo is cloned to (including parent folders in any), *repo url* is the url of the repo (using git or https), *repo typ* is the type of repo (git, hg, svn, bzr, etc), and *repo version* is the version of the repo to check against, specified as a branch name, tag name, or commit hash. Example:
+where *repo directory name* is the name of the directory where the repo is cloned to (including parent folders in any), *repo url* is the url of the repo (using git or https), *repo type* is the type of repo (git, hg, svn, bzr, etc), and *repo version* is the version of the repo to check against, specified as a branch name, tag name, or commit hash. Example:
 
 ```yaml
   repositories:
