@@ -14,8 +14,9 @@ import pendulum
 import rich
 from rich.table import Table
 from rich.console import Console
+console = Console()
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QGridLayout, QMainWindow
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QGridLayout
 
 arrow_up =  u'\u2191'
 arrow_down = u'\u2193' 
@@ -203,7 +204,6 @@ def show_repos_config_versions(repos_config_versions, full=False, gui=True):
     display_set = sorted(display_set)
 
     # Create table
-    console = Console()
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Repo Name")
     for version_name in repos_config_versions:
@@ -334,14 +334,14 @@ def show_gui(repos, config_file_path= "", config_repo=None):
     sys.exit(app.exec_())
 
 
-def get_workspace_repos(source_dir):
+def get_workspace_repos(workspace_directory):
     source_repos = {}
-    if (not os.path.isdir(source_dir)):
-        print(f"{source_dir} is not a directory")
+    if (not os.path.isdir(workspace_directory)):
+        print(f"{workspace_directory} is not a directory")
         return source_repos
 
     # Gather all repositories in source directory
-    for root, dirs, files in os.walk(source_dir):
+    for root, dirs, files in os.walk(workspace_directory):
         for dir_in_source in dirs:
             d = Path(root) / dir_in_source
             # Check if directory is a git repository
@@ -460,11 +460,11 @@ def compare_config_files(*config_files, full=False, verbose=False, show_time=Fal
 
     show_repos_config_versions(repos_config_versions, full )
 
-def check_workspace_status(source_dir, full=False, verbose=False, show_time=False, fetch=False, gui=False):
+def check_workspace_status(workspace_directory, full=False, verbose=False, show_time=False, fetch=False, gui=False):
     """ Check the status of all repositories in a workspace
     
         Args:
-            source_dir (str): path to the workspace
+            workspace_directory (str): path to the workspace
             full (bool, optional): show the full list. Defaults to False.
             verbose (bool, optional): show more information. Defaults to False.
             show_time (bool, optional): show last time each configuration file was changed. Defaults to False.
@@ -472,7 +472,7 @@ def check_workspace_status(source_dir, full=False, verbose=False, show_time=Fals
             gui (bool, optional): show the GUI. Defaults to False.
     """
     # Load workspace
-    source_repos = get_workspace_repos(source_dir)
+    source_repos = get_workspace_repos(workspace_directory)
 
     if (gui):
         show_gui(source_repos)
@@ -496,11 +496,11 @@ def check_workspace_status(source_dir, full=False, verbose=False, show_time=Fals
 
     show_repos_config_versions(workspace_current_branch_version, full=True)
 
-def compare_workspace_to_config(source_dir, config_filename, full=False, verbose=False, show_time=False, gui=False):
+def compare_workspace_to_config(workspace_directory, config_filename, full=False, verbose=False, show_time=False, gui=False):
     """ Compare the status of all repositories in a workspace with a configuration file
 
         Args:
-            source_dir (str): path to the workspace
+            workspace_directory (str): path to the workspace
             config_filename (str): path to the configuration file
             full (bool, optional): show the full list. Defaults to False.
             verbose (bool, optional): show more information. Defaults to False.
@@ -509,7 +509,7 @@ def compare_workspace_to_config(source_dir, config_filename, full=False, verbose
     """
     
     # Load workspace
-    source_repos = get_workspace_repos(source_dir)
+    source_repos = get_workspace_repos(workspace_directory)
     
     # Get current branch for each repo
     workspace_current_branch_version = {}
@@ -522,7 +522,7 @@ def compare_workspace_to_config(source_dir, config_filename, full=False, verbose
 
     # Check if source directory exists
     for repo_local_path in configuration_file_dict:
-        if not os.path.exists(source_dir / repo_local_path):
+        if not os.path.exists(workspace_directory / repo_local_path):
             print(f"{configuration_file_dict[repo_local_path]} does not exist")
 
 
@@ -544,10 +544,9 @@ def compare_workspace_to_config(source_dir, config_filename, full=False, verbose
 
 def main():
     # Parse arguments
-    console = Console()
     parser = argparse.ArgumentParser()
     parser.add_argument("command", help="Action to take", choices=["status", "wconfig", "config_list", "config_versions"])
-    parser.add_argument("-s", "--source", help="Source directory")
+    parser.add_argument("-w", "--workspace_directory", help="Workspace directory")
     parser.add_argument("-c", "--config", help="VCS Configuration file", nargs='*')
     parser.add_argument("-f","--full", action="store_true",  help="If present show all repositories, if omitted show only repositories that don't match the configuration file")
     parser.add_argument("-v","--verbose", action="store_true", help="Show more information")
@@ -555,7 +554,7 @@ def main():
     parser.add_argument("--filter", default=None, help="Show last modified time", nargs='*')
     parser.add_argument("--fetch", action="store_true", help="Fetch remote branches")
     parser.add_argument("--gui", action="store_true", help="Use GUI to change branches")
-    parser.add_argument("--use_only_filename", action="store_true", help="Use only filename for config table")
+    parser.add_argument("--full-name", action="store_true", help="Use full filename for config table")
     args = parser.parse_args()
 
     command = args.command
@@ -578,27 +577,27 @@ def main():
     # Check commands
     if (command ==  "status"):
         # Check if source directory is specified
-        if not args.source:
+        if not args.workspace_directory:
             print("Source directory is not specified, using current directory")
-            source_dir = Path(os.getcwd())
+            workspace_directory = Path(os.getcwd())
         else:
-            source_dir = Path(args.source)
-        print(f"Using source path {source_dir}")
-        check_workspace_status(source_dir, full, verbose_output, show_last_modified, fetch=fetch, gui=gui)
+            workspace_directory = Path(args.workspace_directory)
+        print(f"Using source path {workspace_directory}")
+        check_workspace_status(workspace_directory, full, verbose_output, show_last_modified, fetch=fetch, gui=gui)
     elif (command == "wconfig"):
         # Check if source directory is specified
-        if not args.source:
+        if not args.workspace_directory:
             print("Source directory is not specified, using current directory")
-            source_dir = Path(os.getcwd())
+            workspace_directory = Path(os.getcwd())
         else:
-            source_dir = Path(args.source)
+            workspace_directory = Path(args.workspace_directory)
 
         # Check if config file is specified
         if not args.config:
             print("Config file is not specified")
             sys.exit(1)
         configuration_file_path = args.config[0]
-        compare_workspace_to_config(source_dir, configuration_file_path, full, verbose_output, show_last_modified, gui)
+        compare_workspace_to_config(workspace_directory, configuration_file_path, full, verbose_output, show_last_modified, gui)
 
     elif (command == "config_list"):
         # Check if config file is specified
