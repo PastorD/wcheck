@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wcheck"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tool to compare different versions of git repositories and reports their differences."
 authors = ["Daniel Pastor <danpasmor@gmail.com>"]
 license = "MIT"
