@@ -329,7 +329,7 @@ def show_gui(repos, config_file_path= "", config_repo=None):
 
 def get_workspace_repos(workspace_directory):
     source_repos = {}
-    if (not os.path.isdir(workspace_directory)):
+    if (not workspace_directory.is_dir()):
         print(f"{workspace_directory} is not a directory")
         return source_repos
 
@@ -338,7 +338,7 @@ def get_workspace_repos(workspace_directory):
         for dir_in_source in dirs:
             d = Path(root) / dir_in_source
             # Check if directory is a git repository
-            if os.path.isdir(d) and os.path.exists( d / ".git"):
+            if d.is_dir() and ( d / ".git").exists():
                 source_repos[dir_in_source] = Repo(d)
     return source_repos
 
@@ -538,7 +538,7 @@ def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("command", help="Action to take", choices=["status", "config_workspace", "config_list", "config_versions"])
-    parser.add_argument("-w", "--workspace_directory", help="Workspace directory")
+    parser.add_argument("-w", "--workspace-directory", help="Workspace directory. Use current directory if not specified")
     parser.add_argument("-c", "--config", help="VCS Configuration file", nargs='*')
     parser.add_argument("-f","--full", action="store_true",  help="If present show all repositories, if omitted show only repositories that don't match the configuration file")
     parser.add_argument("-v","--verbose", action="store_true", help="Show more information")
