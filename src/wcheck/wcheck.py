@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.console import Console
 console = Console()
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QGridLayout
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QGridLayout, QMainWindow
 
 arrow_up =  u'\u2191'
 arrow_down = u'\u2193' 
@@ -286,13 +286,10 @@ class RepoObject:
         print(f"{self.abs_path}")
         subprocess.run(["code", self.abs_path], shell=True)
 
-class MyWindow(QWidget):
+class WCheckGUI(QWidget):
     def __init__(self, repos, config_file_path= "", config_repo=None):
-        super(MyWindow,self).__init__()
+        super(WCheckGUI,self).__init__()
         self.initUI(repos, config_file_path, config_repo)
-
-    # def refresh_repos(self):
-    #     print(f"HEER")
 
     def initUI(self, repos, config_file_path= "", config_repo=None):
         
@@ -300,9 +297,6 @@ class MyWindow(QWidget):
         if (config_repo != None):
             layout.addWidget(QLabel(f"Configuration file: {config_file_path}"))
         repo_layout = QGridLayout()
-        # bb = QPushButton("Refresh")
-        # bb.clicked.connect(self.refresh_repos)
-        # layout.addWidget(bb)
         layout.addLayout(repo_layout)
         self.repo_objects = {}
         for repo_i, repo_name in enumerate(repos):
@@ -322,16 +316,15 @@ class MyWindow(QWidget):
                     label_config = QLabel(f"Not in config")
                     label_config.setStyleSheet("color: Gray")
                     repo_layout.addWidget(label_config, repo_i, 4)
-            # label = QLabel(f"{repo_name} - {repo_version}")
         self.setLayout(layout)
 
 def show_gui(repos, config_file_path= "", config_repo=None): 
     # Create PyQt5 application with the list of repositories
     app = QApplication(sys.argv)
-    window = MyWindow(repos, config_file_path, config_repo)
-    window.setWindowTitle("Repositories")
+    window = WCheckGUI(repos, config_file_path, config_repo)
+    window.setWindowTitle("Worspace Repositories")
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 def get_workspace_repos(workspace_directory):
@@ -372,7 +365,6 @@ def compare_config_versions(config_filename, full=False, verbose=False, show_tim
         config_repo = Repo(config_filename, search_parent_directories=True) 
     except:
         print("Config file is not inside a git repository")
-        # sys.exit(1)
         return
 
     if (config_repo.is_dirty()):
@@ -383,11 +375,11 @@ def compare_config_versions(config_filename, full=False, verbose=False, show_tim
             config_repo.git.stash()
         else:
             return
-        # sys.exit(1)
 
 
     original_branch = config_repo.active_branch.name
-    today_datime = pendulum.now()
+    if show_time:
+        today_datime = pendulum.now()
 
     if (version_filter is not None):
         print(f"Using filter {version_filter}")
@@ -430,23 +422,23 @@ def compare_config_versions(config_filename, full=False, verbose=False, show_tim
     show_repos_config_versions(repos_config_versions, full)
 
 
-def compare_config_files(*config_files, full=False, verbose=False, show_time=False, use_only_filename=False):
+def compare_config_files(*config_files, full=False, verbose=False, show_time=False, full_name=False):
     """Compare a list of configuration files
 
     Args:
         full (bool, optional): show the full list. Defaults to False.
         verbose (bool, optional): show more information. Defaults to False.
         show_time (bool, optional): show last time each configuration file was changed. Defaults to False.
-        use_only_filename (bool, optional): show the configuration filename only, not the path. Defaults to False.
+        full_name (bool, optional): show the configuration filename full path, not only the filename. Defaults to False.
     """
     
     repos_config_versions = {}
     print(f"Comparing {len(config_files)} config files")
     for config_filename in config_files:
-        if (use_only_filename):
-            config_name = config_filename.split("/")[-1]
-        else:
+        if (full_name):
             config_name = config_filename
+        else:
+            config_name = config_filename.split("/")[-1]
         print(f"Reading {config_filename}")
         try:
             with open(config_filename, 'r') as file:
@@ -545,13 +537,13 @@ def compare_workspace_to_config(workspace_directory, config_filename, full=False
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", help="Action to take", choices=["status", "wconfig", "config_list", "config_versions"])
+    parser.add_argument("command", help="Action to take", choices=["status", "config_workspace", "config_list", "config_versions"])
     parser.add_argument("-w", "--workspace_directory", help="Workspace directory")
     parser.add_argument("-c", "--config", help="VCS Configuration file", nargs='*')
     parser.add_argument("-f","--full", action="store_true",  help="If present show all repositories, if omitted show only repositories that don't match the configuration file")
     parser.add_argument("-v","--verbose", action="store_true", help="Show more information")
     parser.add_argument("--show_time", action="store_true", help="Show last modified time")
-    parser.add_argument("--filter", default=None, help="Show last modified time", nargs='*')
+    parser.add_argument("--filter", default=None, help="List of filters for versions", nargs='*')
     parser.add_argument("--fetch", action="store_true", help="Fetch remote branches")
     parser.add_argument("--gui", action="store_true", help="Use GUI to change branches")
     parser.add_argument("--full-name", action="store_true", help="Use full filename for config table")
@@ -570,21 +562,22 @@ def main():
     fetch = args.fetch
     version_filter = args.filter
     show_last_modified = args.show_time
-    use_only_filename = args.use_only_filename
+    full_name = args.full_name
     gui = args.gui
-    print(f"Options: verbose={verbose_output}, full={full}, show_last_modified={show_last_modified}")
+    if verbose_output:
+        print(f"Selected Options: verbose={verbose_output}, full={full}, show_last_modified={show_last_modified}")
 
     # Check commands
     if (command ==  "status"):
         # Check if source directory is specified
         if not args.workspace_directory:
-            print("Source directory is not specified, using current directory")
+            print("Workspace directory is not specified, using current directory")
             workspace_directory = Path(os.getcwd())
         else:
             workspace_directory = Path(args.workspace_directory)
-        print(f"Using source path {workspace_directory}")
+        print(f"Using workspace directory {workspace_directory}")
         check_workspace_status(workspace_directory, full, verbose_output, show_last_modified, fetch=fetch, gui=gui)
-    elif (command == "wconfig"):
+    elif (command == "config_workspace"):
         # Check if source directory is specified
         if not args.workspace_directory:
             print("Source directory is not specified, using current directory")
@@ -606,7 +599,7 @@ def main():
             sys.exit(1)
         configuration_files_path = args.config
 
-        compare_config_files(*configuration_files_path,  full=full, verbose=verbose_output, show_time=show_last_modified, use_only_filename=use_only_filename)
+        compare_config_files(*configuration_files_path,  full=full, verbose=verbose_output, show_time=show_last_modified, full_name=full_name)
 
     elif (command == "config_versions"):
         # Check if config file is specified
