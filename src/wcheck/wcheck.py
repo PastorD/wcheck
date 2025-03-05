@@ -7,15 +7,14 @@ import argparse
 from pathlib import Path
 import re
 
-from datetime import datetime
+import pendulum
+
 import yaml
 from git import Repo
 
-import rich
 from rich.table import Table
 from rich.console import Console
 
-console = Console()
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,9 +24,9 @@ from PySide6.QtWidgets import (
     QComboBox,
     QPushButton,
     QGridLayout,
-    QMainWindow,
 )
 
+console = Console()
 arrow_up = "\u2191"
 arrow_down = "\u2193"
 
@@ -121,7 +120,7 @@ def get_repo_head_ref(repo, verbose_output=False):
         return repo.active_branch.name
 
 
-def get_remote_status(repo):
+def get_remote_status(repo: Repo) -> tuple[int, int]:
     if repo.head.is_detached:
         return 0, 0  # no remote status for detached head
 
@@ -136,17 +135,17 @@ def get_remote_status(repo):
         print(
             f"Branch {repo.active_branch.name} is not tracked by remote {remote.name}"
         )
-        return
+        return 0, 0
 
     # Get remote commit
     remote_commit = repo.remotes[index_remote].refs[index_ref].commit
     commits_remote_accumulated = [remote_commit]
-    commits_remote_frontier = [remote_commit]
+    # commits_remote_frontier = [remote_commit]
 
     # Get local commit
     local_commit = repo.head.commit
     commits_local_accumulated = [local_commit]
-    commits_local_frontier = [local_commit]
+    # commits_local_frontier = [local_commit]
 
     if local_commit.hexsha == remote_commit.hexsha:
         # print (f"Branch {repo.active_branch.name} is up to date with remote {remote.name}")
@@ -191,16 +190,15 @@ def get_remote_status(repo):
         return push_counter, pull_counter
 
 
-def get_elapsed_time_repo(repo):
-    # return diff time using datetime
-    return "todo"
-
-    # pendulum.format_diff(
-        # pendulum.now() - repo.head.commit.committed_datetime, absolute=True
-    # )
+def get_elapsed_time_repo(repo: Repo) -> str:
+    return pendulum.format_diff(
+        pendulum.now() - repo.head.commit.committed_datetime, absolute=True
+    )
 
 
-def show_repos_config_versions(repos_config_versions, full=False, gui=True):
+def show_repos_config_versions(
+    repos_config_versions: dict, full: bool = False, gui: bool = True
+) -> None:
     # Get list with all repositories
     repos_set = set()
     for version_name in repos_config_versions:
@@ -214,9 +212,12 @@ def show_repos_config_versions(repos_config_versions, full=False, gui=True):
             repo_version = None
             for version_name in repos_config_versions:
                 if repo_name not in repos_config_versions[version_name]:
-                    unique_set.add(repo_name)  ## add repo that is not in some version
+                    if version_name != "Config version":
+                        unique_set.add(
+                            repo_name
+                        )  ## add repo that is not in some version
                     break
-                if repo_version == None:
+                if repo_version is None:  ## first versions
                     repo_version = repos_config_versions[version_name][repo_name]
                 elif repo_version != repos_config_versions[version_name][repo_name]:
                     unique_set.add(
@@ -264,12 +265,12 @@ def show_repos_config_versions(repos_config_versions, full=False, gui=True):
     if len(table.rows) > 0:
         console.print(table)
     else:
-        print(f"All configurations are identical")
+        print("All configurations are identical")
 
 
 class RepoObject:
-    def __init__(self, repo, repo_name) -> None:
-        status_str = get_status_repo(repo)
+    def __init__(self, repo, repo_name, ignore_remote=False) -> None:
+        # status_str = get_status_repo(repo)
         self.repo_dirty = repo.is_dirty()
 
         self.repo = repo
@@ -278,21 +279,18 @@ class RepoObject:
         if self.repo_dirty:
             self.qlabel.setStyleSheet("background-color: Yellow")
         self.combo_box = QComboBox()
-        self.checkout_button = QPushButton(f"Checkout selected")
-        self.vscode_button = QPushButton(f"Open in VCS")
+        self.checkout_button = QPushButton("Checkout selected")
+        self.editor_button = QPushButton("Open in editor")
         self.active_branch = get_repo_head_ref(repo)
 
         self.checkout_button.clicked.connect(self.checkout_branch)
-        self.vscode_button.clicked.connect(self.vcs_button_pressed)
+        self.editor_button.clicked.connect(self.editor_button_pressed)
         self.checkout_button.setEnabled(False)
 
         self.combo_box.addItem(str(self.active_branch))
 
-        # for branch in self.repo.branches:
-        #     if ( branch.name != self.active_branch):
-        #         self.combo_box.addItem(str(branch))
         for ref in self.repo.references:
-            if ref.name.startswith(repo.remotes[0].name):
+            if ignore_remote and ref.name.startswith(repo.remotes[0].name):
                 continue
             if ref.name != self.active_branch:
                 self.combo_box.addItem(str(ref))
@@ -300,7 +298,10 @@ class RepoObject:
 
     def selectionchange(self, index):
         print(f"Selection changed to {self.combo_box.currentText()}")
-        if self.combo_box.currentText() != self.active_branch:
+        branch_name = self.combo_box.currentText()
+        if branch_name.startswith("origin/"):
+            branch_name = branch_name.replace("origin/", "", 1)
+        if branch_name != self.active_branch:
             self.checkout_button.setEnabled(True)
         else:
             self.checkout_button.setEnabled(False)
@@ -310,15 +311,21 @@ class RepoObject:
             f"Checkout button pressed for repo {self.repo.working_tree_dir}, current label {self.qlabel.text()}"
         )
         print(f" - Checking out branch, {self.combo_box.currentText()}")
-        resutl = self.repo.git.checkout(self.combo_box.currentText())
+        # if the branch is from origin, checkout local branch instead of remote
+        branch_name = self.combo_box.currentText()
+        if branch_name.startswith("origin/"):
+            branch_name = branch_name.replace("origin/", "", 1)
+
+        resutl = self.repo.git.checkout(branch_name)
         print(f" - Result: {resutl}")
         self.active_branch = get_repo_head_ref(self.repo)
         self.selectionchange(0)
 
-    def vcs_button_pressed(self):
-        print(f"VCS button pressed, {self.repo.working_tree_dir}")
+    def editor_button_pressed(self):
+        print(f"editor button pressed, {self.repo.working_tree_dir}")
         print(f"{self.abs_path}")
-        subprocess.run(["code", self.abs_path], shell=True)
+        editor_command_name = os.getenv("EDITOR", "code")
+        subprocess.run([editor_command_name, self.abs_path], check=True)
 
 
 class WCheckGUI(QWidget):
@@ -326,9 +333,14 @@ class WCheckGUI(QWidget):
         super(WCheckGUI, self).__init__()
         self.initUI(repos, config_file_path, config_repo)
 
-    def initUI(self, repos, config_file_path="", config_repo=None):
+    def initUI(
+        self,
+        repos: list[Repo],
+        config_file_path: str = "",
+        config_repo: dict | None = None,
+    ):
         layout = QVBoxLayout()
-        if config_repo != None:
+        if config_repo is not None:
             layout.addWidget(QLabel(f"Configuration file: {config_file_path}"))
         repo_layout = QGridLayout()
         layout.addLayout(repo_layout)
@@ -341,8 +353,8 @@ class WCheckGUI(QWidget):
             repo_layout.addWidget(
                 self.repo_objects[repo_name].checkout_button, repo_i, 2
             )
-            repo_layout.addWidget(self.repo_objects[repo_name].vscode_button, repo_i, 3)
-            if config_repo != None:
+            repo_layout.addWidget(self.repo_objects[repo_name].editor_button, repo_i, 3)
+            if config_repo is not None:
                 if repo_name in config_repo:
                     label_config = QLabel(f"Config {config_repo[repo_name]}")
                     if (
@@ -352,13 +364,15 @@ class WCheckGUI(QWidget):
                         label_config.setStyleSheet("background-color: Red")
                     repo_layout.addWidget(label_config, repo_i, 4)
                 else:
-                    label_config = QLabel(f"Not in config")
+                    label_config = QLabel("Not in config")
                     label_config.setStyleSheet("color: Gray")
                     repo_layout.addWidget(label_config, repo_i, 4)
         self.setLayout(layout)
 
 
-def show_gui(repos, config_file_path="", config_repo=None):
+def show_gui(
+    repos: list[Repo], config_file_path: str = "", config_repo: dict | None = None
+):
     # Create PyQt5 application with the list of repositories
     app = QApplication(sys.argv)
     window = WCheckGUI(repos, config_file_path, config_repo)
@@ -412,8 +426,8 @@ def compare_config_versions(
     # Read config file
     try:
         config_repo = Repo(config_filename, search_parent_directories=True)
-    except:
-        print("Config file is not inside a git repository")
+    except Exception:
+        print(f"Config file is not inside a git repository, {config_filename}")
         return
 
     if config_repo.is_dirty():
@@ -428,8 +442,6 @@ def compare_config_versions(
             return
 
     original_branch = config_repo.active_branch.name
-    if show_time:
-        today_datime = datatime.now()
 
     if version_filter is not None:
         print(f"Using filter {version_filter}")
@@ -445,7 +457,7 @@ def compare_config_versions(
         try:
             with open(config_filename, "r") as file:
                 configuration_file_dict = yaml.safe_load(file)["repositories"]
-        except:
+        except yaml.YAMLError:
             if verbose:
                 print(f"Config file in {ref} ref is not valid YAML")
             continue
@@ -461,7 +473,7 @@ def compare_config_versions(
             ref_name += (
                 " (modified "
                 # + pendulum.format_diff(
-                    # today_datime - ref.commit.authored_datetime, absolute=False
+                # today_datime - ref.commit.authored_datetime, absolute=False
                 # )
                 + ")"
             )
@@ -503,7 +515,7 @@ def compare_config_files(
         try:
             with open(config_filename, "r") as file:
                 configuration_file_dict = yaml.safe_load(file)["repositories"]
-        except:
+        except yaml.YAMLError:
             print(f"Config file {config_filename} is not valid YAML")
             continue
         repos_config_versions[config_name] = {}
@@ -598,7 +610,7 @@ def compare_workspace_to_config(
 
     # Check if source directory exists
     for repo_local_path in configuration_file_dict:
-        if not os.path.exists(workspace_directory / repo_local_path):
+        if not os.path.exists(workspace_directory / repo_local_path) and verbose:
             print(f"{configuration_file_dict[repo_local_path]} does not exist")
 
     config_file_version = {}
