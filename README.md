@@ -1,13 +1,13 @@
 # Workspace Check (wcheck)
 
-Compares different versions of git repositories and reports their differences. Possible options of workspace:
-- local workspace in a directory, represented by the current git branch of each repository
+Compares diffent workspaces of git repositories and reports their differences. Two types of workspaces are supported:
+- local workspace in a directory, represented by the current git status of each repository
 - workspace defined by a vcs file
 
 Possible comparisions:
 - compare local workspace against a configuration file (command=wconfig)
-- compare two configuration files, e.g. robot_A.vcs with robot_B.vcs (command=config_list)
-- compare all git references of a configurion file, this includes all active branches and tags (command=config_versions)
+- compare two configuration files, e.g. robot_A.vcs with robot_B.vcs (command=config-list)
+- compare all git references of a configurion file, this includes all active branches and tags (command=config-versions)
 
 
 ## Usage
@@ -16,13 +16,18 @@ General usage
 ```bash
 wcheck <command> <parameters>
 ```
-Command options: status, wconfig, config_list, config_versions
+Command options: status (default), wconfig, config-list, config-versions
 
 Check workspace status
 ```bash
-wcheck status [-w <workspace_location>] [--full] [--gui] [-v] [--show-time] 
+wcheck status [-w <workspace_location>] [-f,--full] [--gui] [-v,--verbose] [--show-time] 
 ```
-It will show the git status of each repository. The legend is U: number of untracked files, C: number of changed files, S: number of staged files, arrow up: number of commits to push, arrow down: number of commits to pull.
+It will show the git status of each repository. The legend is as follows:
+- U: number of untracked files 
+- M: number of changed files
+- S: number of staged files
+- ↓(arrow down): number of commits to pull
+- ↑(arrow up): number of commits to push.
 
 Workspace location can be specified with argument _-w_, if not provided, it will use current location. 
 
@@ -34,13 +39,15 @@ The configuration file uses VCSTOOL structure, see an overview below
 
 Compare multiple configuration files
 ```bash
-wcheck config_list -c <config_A> <config_B> .. <config_N>
+wcheck config-list -c <config_A> <config_B> .. <config_N>
 ```
+It will show a table comparing all configuration files.
 
 Compare git references (branches and tags), of the configuration file
 ```bash
-wcheck config_versions -c <config> [-h] [--full] [-v] [--show-time] [--full-path]
+wcheck config-versions -c <config> [-h] [--full] [-v] [--show-time] [--full-path]
 ```
+It will show a table comparing all versions of the configuration file.
 
 Optional arguments
 ```
@@ -74,32 +81,3 @@ where *repo directory name* is the name of the directory where the repo is clone
       url: git@github.com:dirk-thomas/vcstool.git
       version: master
 ```
-## Other multi-repository tools
-
-
-
-| Name                                                                         | Status    | Last release  | Language | Git interaction      | Terminal | GUI | Compares configs | Compares versions | Description                                                                                                     |
-|------------------------------------------------------------------------------|-----------|---------------|----------|----------------------|----------|-----|------------------|-------------------|-----------------------------------------------------------------------------------------------------------------|
-| <a href="https://github.com/davvid/garden/">garden</a>                       | active    | July 2022     | Rust     | native rust          | Yes      | no  | no               | no                | manage git project dependencies and worktrees, custom commands                                                  |
-| <a href="https://github.com/nickgerace/gfold">gfold</a>                      | active    | July 2022     | Rust     | native rust          | Yes      | no  |                  |                   | lists status of multiple repositories, readonly, config file, rust                                              |
-| <a href="https://github.com/motemen/ghq">ghq</a>                             | active    | May 2022      | Go       |                      | yes      |     |                  |                   | manage remote repository clones                                                                                 |
-| <a href="https://github.com/tkrajina/git-plus">git-plus</a>                  | active    | August 2022   | Python   | git cli w/subprocess |          |     |                  |                   | multi: run commands in multiple git repos                                                                       |
-| <a href="https://github.com/earwig/git-repo-updater">git-repo-updater</a>    | old       | 2019          | Python   | python gitRepo       |          |     |                  |                   | gitup: update multiple git repos at once                                                                        |
-| <a href="https://github.com/nosarthur/gita">gita</a>                         | active    | January 2022  | Python   | git cli w/subprocess |          |     |                  |                   | manage multiple git repos                                                                                       |
-| <a href="https://github.com/isacikgoz/gitbatch">gitbatch</a>                 |           |               | Go       |                      |          |     |                  |                   | manage multiple git repos in one place                                                                          |
-| <a href="https://github.com/Masterminds/vcs">go-vcs</a>                      | active    | March 2022    | Go       |                      |          |     |                  |                   | version control repository management for Golang                                                                |
-| <a href="https://github.com/siemens/kas">kas</a>                             | active    | August 2022   | Python   |                      |          |     |                  |                   | bitbake repository management tool                                                                              |
-| <a href="https://github.com/fboender/multi-git-status">mgitstatus</a>        | active    | June 2022     | Bash     | git cli              |          |     |                  |                   | show status in multiple git repos                                                                               |
-| <a href="https://manicli.com/">mani</a>                                      | active    | June 2022     |          |                      |          |     |                  |                   | manage multiple repositories, tasks, tags, YAML config, golang                                                  |
-| <a href="https://github.com/lindell/multi-gitter">multi-gitter</a>           | active    | August 2022   | Go       |                      |          |     |                  |                   | run command and commit, manipulates pull requests, YAML config, tightly bound to forges (GitHub, GitLab, Gitea) |
-| <a href="https://fabioz.github.io/mu-repo/">mu-repo</a>                      | active    | Octover 20220 | Python   |                      |          |     |                  |                   | help working with multiple git repos                                                                            |
-| <a href="https://android.googlesource.com/tools/repo">repo</a>               | active    |               |          |                      |          |     |                  |                   | git repository management tool                                                                                  |
-| <a href="https://github.com/vcstools/rosinstall">rosinstall</a>              | archived  | 2016          | Python   |                      |          |     |                  |                   | source code workspace management tool                                                                           |
-| <a href="https://www.jelmer.uk/silver-platter-intro.html">silver-platter</a> | active    | March 2022    | Python   |                      |          |     |                  |                   | make automated changes in different version control repositories                                                |
-| <a href="https://github.com/brandon-rhodes/uncommitted">uncommitted</a>      | active    | January 2021  | Python   |                      |          |     |                  |                   | find uncommitted changes in VCS directories                                                                     |
-| <a href="https://github.com/ChristophBerg/dotfiles/blob/master/bin/v">v</a>  | abandoned | 2009          | Bash     |                      |          |     |                  |                   | version control subcommand wrapper                                                                              |
-| <a href="https://www.greenend.org.uk/rjk/vcs/">VCS</a>                       | abandoned | 2018          |          |                      |          |     |                  |                   | a wrapper for version control systems                                                                           |
-| <a href="https://github.com/xolox/python-vcs-repo-mgr">vcs-repo-mgr</a>      | abandoned | 2018          | Python   |                      |          |     |                  |                   | version control repository manager                                                                              |
-| <a href="https://github.com/dirk-thomas/vcstool">vcstool</a>                 | active    |               | Python   | git cli w/subprocess |          |     |                  |                   | work with multiple repositories                                                                                 |
-| <a href="https://github.com/vcstools/vcstools">vcstools</a>                  | archived  |               | Python   |                      |          |     |                  |                   | Python API wrapping version control systems                                                                     |
-| <a href="https://github.com/vcstools/wstool">wstool</a>                      | archived  |               | Python   |                      |          |     |                  |                   | maintain workspace of projects from multiple VCSes                                                              |

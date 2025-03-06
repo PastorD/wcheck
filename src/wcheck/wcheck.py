@@ -73,7 +73,7 @@ def get_status_repo(repo):
         if n_untracked > 0:
             print_output += "[orange1]" + str(n_untracked) + "U[/orange1]"
         if n_changes > 0:
-            print_output += "[bright_red]" + str(n_changes) + "C[/bright_red]"
+            print_output += "[bright_red]" + str(n_changes) + "M[/bright_red]"
         if n_staged > 0:
             print_output += "[bright_magenta]" + str(n_staged) + "S[/bright_magenta]"
         print_output += ")"
@@ -638,7 +638,9 @@ def main():
     parser.add_argument(
         "command",
         help="Action to take",
-        choices=["status", "config_workspace", "config_list", "config_versions"],
+        choices=["status", "wconfig", "config-list", "config-versions"],
+        default="status",
+        nargs='?',
     )
     parser.add_argument(
         "-w",
@@ -669,13 +671,6 @@ def main():
     args = parser.parse_args()
 
     command = args.command
-    # Show help if no arguments are given
-    if command != "status" and len(sys.argv) == 2:
-        print("No arguments given, showing help:")
-        parser.print_help()
-        sys.exit(1)
-
-    # Load config file
     verbose_output = args.verbose
     full = args.full
     fetch = args.fetch
@@ -705,7 +700,7 @@ def main():
             fetch=fetch,
             gui=gui,
         )
-    elif command == "config_workspace":
+    elif command == "wconfig":
         # Check if source directory is specified
         if not args.workspace_directory:
             print("Source directory is not specified, using current directory")
@@ -727,7 +722,7 @@ def main():
             gui,
         )
 
-    elif command == "config_list":
+    elif command == "config-list":
         # Check if config file is specified
         if not args.config:
             print("Config file is not specified")
@@ -742,7 +737,7 @@ def main():
             full_name=full_name,
         )
 
-    elif command == "config_versions":
+    elif command == "config-versions":
         # Check if config file is specified
         if not args.config:
             print("Config file is not specified")
