@@ -9,6 +9,23 @@ Possible comparisions:
 - compare two configuration files, e.g. robot_A.vcs with robot_B.vcs (command=config-list)
 - compare all git references of a configurion file, this includes all active branches and tags (command=config-versions)
 
+## Installation
+
+Easiest way to install is using `pipx`, which will install the package in an isolated environment, ensuring it does not interfere with other packages:
+```bash
+pipx install wcheck
+```
+To install `pipx`, follow the [instructions](https://pipx.pypa.io/stable/installation/) for your distribution. For example, in Ubuntu you can install it with:
+```bash
+sudo apt install pipx
+pipx ensurepath
+```
+
+Alternatively, you can install it using pip:
+```bash
+pip install wcheck
+```
+
 
 ## Usage
 
