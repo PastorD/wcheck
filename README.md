@@ -11,14 +11,9 @@ Possible comparisions:
 
 ## Installation
 
-Easiest way to install is using `pipx`, which will install the package in an isolated environment, ensuring it does not interfere with other packages:
+Easiest way to install is using `uvx`, which will install the package in an isolated environment, ensuring it does not interfere with other packages:
 ```bash
-pipx install wcheck
-```
-To install `pipx`, follow the [instructions](https://pipx.pypa.io/stable/installation/) for your distribution. For example, in Ubuntu you can install it with:
-```bash
-sudo apt install pipx
-pipx ensurepath
+uvx install wcheck
 ```
 
 Alternatively, you can install it using pip:

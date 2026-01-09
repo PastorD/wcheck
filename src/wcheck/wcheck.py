@@ -3,7 +3,7 @@
 import os
 import sys
 import subprocess
-import argparse
+import click
 from pathlib import Path
 import re
 
@@ -15,20 +15,15 @@ from git import Repo
 from rich.table import Table
 from rich.console import Console
 
-
-from PySide6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QComboBox,
-    QPushButton,
-    QGridLayout,
-)
-
 console = Console()
 arrow_up = "\u2191"
 arrow_down = "\u2193"
+
+
+def _show_gui(repos, config_file_path="", config_repo=None):
+    """Lazy import and call show_gui to avoid importing PySide6 unless needed."""
+    from wcheck.gui import show_gui
+    show_gui(repos, config_file_path, config_repo)
 
 
 ##################################### UTILITLY FUNCTIONS ###################
@@ -124,18 +119,23 @@ def get_remote_status(repo: Repo) -> tuple[int, int]:
     if repo.head.is_detached:
         return 0, 0  # no remote status for detached head
 
+    # Check if there are any remotes
+    if not repo.remotes:
+        return 0, 0  # no remotes configured
+
     # Find index for remote branch matching current branch
     found_remote_ref = False
+    index_remote = 0
+    index_ref = 0
     for index_remote, remote in enumerate(repo.remotes):
         for index_ref, ref in enumerate(remote.refs):
             if ref.name == remote.name + "/" + repo.active_branch.name:
                 found_remote_ref = True
                 break
+        if found_remote_ref:
+            break
     if not found_remote_ref:
-        print(
-            f"Branch {repo.active_branch.name} is not tracked by remote {remote.name}"
-        )
-        return 0, 0
+        return 0, 0  # branch not tracked by any remote
 
     # Get remote commit
     remote_commit = repo.remotes[index_remote].refs[index_ref].commit
@@ -268,119 +268,6 @@ def show_repos_config_versions(
         print("All configurations are identical")
 
 
-class RepoObject:
-    def __init__(self, repo, repo_name, ignore_remote=False) -> None:
-        # status_str = get_status_repo(repo)
-        self.repo_dirty = repo.is_dirty()
-
-        self.repo = repo
-        self.abs_path = repo.working_tree_dir + "/"
-        self.qlabel = QLabel(f"{repo_name} ")
-        if self.repo_dirty:
-            self.qlabel.setStyleSheet("background-color: Yellow")
-        self.combo_box = QComboBox()
-        self.checkout_button = QPushButton("Checkout selected")
-        self.editor_button = QPushButton("Open in editor")
-        self.active_branch = get_repo_head_ref(repo)
-
-        self.checkout_button.clicked.connect(self.checkout_branch)
-        self.editor_button.clicked.connect(self.editor_button_pressed)
-        self.checkout_button.setEnabled(False)
-
-        self.combo_box.addItem(str(self.active_branch))
-
-        for ref in self.repo.references:
-            if ignore_remote and ref.name.startswith(repo.remotes[0].name):
-                continue
-            if ref.name != self.active_branch:
-                self.combo_box.addItem(str(ref))
-        self.combo_box.currentIndexChanged.connect(self.selectionchange)
-
-    def selectionchange(self, index):
-        print(f"Selection changed to {self.combo_box.currentText()}")
-        branch_name = self.combo_box.currentText()
-        if branch_name.startswith("origin/"):
-            branch_name = branch_name.replace("origin/", "", 1)
-        if branch_name != self.active_branch:
-            self.checkout_button.setEnabled(True)
-        else:
-            self.checkout_button.setEnabled(False)
-
-    def checkout_branch(self):
-        print(
-            f"Checkout button pressed for repo {self.repo.working_tree_dir}, current label {self.qlabel.text()}"
-        )
-        print(f" - Checking out branch, {self.combo_box.currentText()}")
-        # if the branch is from origin, checkout local branch instead of remote
-        branch_name = self.combo_box.currentText()
-        if branch_name.startswith("origin/"):
-            branch_name = branch_name.replace("origin/", "", 1)
-
-        resutl = self.repo.git.checkout(branch_name)
-        print(f" - Result: {resutl}")
-        self.active_branch = get_repo_head_ref(self.repo)
-        self.selectionchange(0)
-
-    def editor_button_pressed(self):
-        print(f"editor button pressed, {self.repo.working_tree_dir}")
-        print(f"{self.abs_path}")
-        editor_command_name = os.getenv("EDITOR", "code")
-        subprocess.run([editor_command_name, self.abs_path], check=True)
-
-
-class WCheckGUI(QWidget):
-    def __init__(self, repos, config_file_path="", config_repo=None):
-        super(WCheckGUI, self).__init__()
-        self.initUI(repos, config_file_path, config_repo)
-
-    def initUI(
-        self,
-        repos: list[Repo],
-        config_file_path: str = "",
-        config_repo: dict | None = None,
-    ):
-        layout = QVBoxLayout()
-        if config_repo is not None:
-            layout.addWidget(QLabel(f"Configuration file: {config_file_path}"))
-        repo_layout = QGridLayout()
-        layout.addLayout(repo_layout)
-        self.repo_objects = {}
-        for repo_i, repo_name in enumerate(repos):
-            self.repo_objects[repo_name] = RepoObject(repos[repo_name], repo_name)
-
-            repo_layout.addWidget(self.repo_objects[repo_name].qlabel, repo_i, 0)
-            repo_layout.addWidget(self.repo_objects[repo_name].combo_box, repo_i, 1)
-            repo_layout.addWidget(
-                self.repo_objects[repo_name].checkout_button, repo_i, 2
-            )
-            repo_layout.addWidget(self.repo_objects[repo_name].editor_button, repo_i, 3)
-            if config_repo is not None:
-                if repo_name in config_repo:
-                    label_config = QLabel(f"Config {config_repo[repo_name]}")
-                    if (
-                        config_repo[repo_name]
-                        != self.repo_objects[repo_name].active_branch
-                    ):
-                        label_config.setStyleSheet("background-color: Red")
-                    repo_layout.addWidget(label_config, repo_i, 4)
-                else:
-                    label_config = QLabel("Not in config")
-                    label_config.setStyleSheet("color: Gray")
-                    repo_layout.addWidget(label_config, repo_i, 4)
-        self.setLayout(layout)
-
-
-def show_gui(
-    repos: list[Repo], config_file_path: str = "", config_repo: dict | None = None
-):
-    # Create PyQt5 application with the list of repositories
-    app = QApplication(sys.argv)
-    window = WCheckGUI(repos, config_file_path, config_repo)
-    window.setWindowTitle("Worspace Repositories")
-    window.show()
-    sys.exit(app.exec())
-
-
 def get_workspace_repos(workspace_directory):
     source_repos = {}
     if not workspace_directory.is_dir():
@@ -462,7 +349,8 @@ def compare_config_versions(
                 print(f"Config file in {ref} ref is not valid YAML")
             continue
 
-        if ref.name.startswith(config_repo.remotes[0].name):
+        # Skip remote branches if there are remotes
+        if config_repo.remotes and ref.name.startswith(config_repo.remotes[0].name):
             continue  # skip remote branches
 
         if verbose:
@@ -485,7 +373,7 @@ def compare_config_versions(
 
     config_repo.git.checkout(original_branch)
     if stash and stashed:
-        config_repo.git.stash.pop()
+        config_repo.git.stash("pop")
         print(f"Stashed changes back in {config_repo.working_dir}")
         stashed = False
 
@@ -549,7 +437,7 @@ def check_workspace_status(
     source_repos = get_workspace_repos(workspace_directory)
 
     if gui:
-        show_gui(source_repos)
+        _show_gui(source_repos)
 
     if fetch:
         for repo_name in source_repos:
@@ -621,7 +509,7 @@ def compare_workspace_to_config(
         ]["version"]
 
     if gui:
-        show_gui(source_repos, config_filename, config_file_version)
+        _show_gui(source_repos, config_filename, config_file_version)
 
     repos_workspace_config_versions = {}
     repos_workspace_config_versions["Workspace version"] = (
@@ -632,128 +520,154 @@ def compare_workspace_to_config(
     show_repos_config_versions(repos_workspace_config_versions, full)
 
 
+@click.group()
+@click.version_option(version="0.2.0")
+def cli():
+    """Manage a workspace of git repositories."""
+    pass
+
+
+@cli.command()
+@click.option(
+    "-w",
+    "--workspace-directory",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Workspace directory. Use current directory if not specified",
+)
+@click.option(
+    "-f",
+    "--full",
+    is_flag=True,
+    help="Show all repositories, not only those with changes",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Show more information")
+@click.option("--show-time", is_flag=True, help="Show last modified time")
+@click.option("--fetch", is_flag=True, help="Fetch remote branches")
+@click.option("--gui", is_flag=True, help="Use GUI to change branches")
+def status(workspace_directory, full, verbose, show_time, fetch, gui):
+    """Check the status of all repositories in a workspace."""
+    if not workspace_directory:
+        click.echo("Workspace directory is not specified, using current directory")
+        workspace_directory = Path(os.getcwd())
+    click.echo(f"Using workspace directory {workspace_directory}")
+    check_workspace_status(
+        workspace_directory,
+        full,
+        verbose,
+        show_time,
+        fetch=fetch,
+        gui=gui,
+    )
+
+
+@cli.command()
+@click.option(
+    "-w",
+    "--workspace-directory",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Workspace directory. Use current directory if not specified",
+)
+@click.option(
+    "-c",
+    "--config",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="VCS Configuration file",
+)
+@click.option(
+    "-f",
+    "--full",
+    is_flag=True,
+    help="Show all repositories, not only those that don't match",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Show more information")
+@click.option("--show-time", is_flag=True, help="Show last modified time")
+@click.option("--gui", is_flag=True, help="Use GUI to change branches")
+def wconfig(workspace_directory, config, full, verbose, show_time, gui):
+    """Compare the workspace with a configuration file."""
+    if not workspace_directory:
+        click.echo("Source directory is not specified, using current directory")
+        workspace_directory = Path(os.getcwd())
+    compare_workspace_to_config(
+        workspace_directory,
+        str(config),
+        full,
+        verbose,
+        show_time,
+        gui,
+    )
+
+
+@cli.command("config-list")
+@click.option(
+    "-c",
+    "--config",
+    required=True,
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="VCS Configuration files to compare",
+)
+@click.option(
+    "-f",
+    "--full",
+    is_flag=True,
+    help="Show all repositories, not only those that differ",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Show more information")
+@click.option("--show-time", is_flag=True, help="Show last modified time")
+@click.option("--full-name", is_flag=True, help="Use full filename for config table")
+def config_list(config, full, verbose, show_time, full_name):
+    """Compare multiple configuration files."""
+    compare_config_files(
+        *config,
+        full=full,
+        verbose=verbose,
+        show_time=show_time,
+        full_name=full_name,
+    )
+
+
+@cli.command("config-versions")
+@click.option(
+    "-c",
+    "--config",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="VCS Configuration file",
+)
+@click.option(
+    "-f",
+    "--full",
+    is_flag=True,
+    help="Show all repositories, not only those that differ",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Show more information")
+@click.option("--show-time", is_flag=True, help="Show last modified time")
+@click.option(
+    "--filter",
+    "version_filter",
+    multiple=True,
+    default=None,
+    help="Filter versions to compare (can be used multiple times)",
+)
+@click.option("--stash", is_flag=True, help="Stash changes before comparing")
+def config_versions(config, full, verbose, show_time, version_filter, stash):
+    """Compare versions of a config file across git branches."""
+    version_filter_list = list(version_filter) if version_filter else None
+    compare_config_versions(
+        config,
+        full=full,
+        verbose=verbose,
+        show_time=show_time,
+        version_filter=version_filter_list,
+        stash=stash,
+    )
+
+
 def main():
-    # Parse arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "command",
-        help="Action to take",
-        choices=["status", "wconfig", "config-list", "config-versions"],
-        default="status",
-        nargs='?',
-    )
-    parser.add_argument(
-        "-w",
-        "--workspace-directory",
-        help="Workspace directory. Use current directory if not specified",
-    )
-    parser.add_argument("-c", "--config", help="VCS Configuration file", nargs="*")
-    parser.add_argument(
-        "-f",
-        "--full",
-        action="store_true",
-        help="If present show all repositories, if omitted show only repositories that don't match the configuration file",
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Show more information"
-    )
-    parser.add_argument(
-        "--show_time", action="store_true", help="Show last modified time"
-    )
-    parser.add_argument(
-        "--filter", default=None, help="List of filters for versions", nargs="*"
-    )
-    parser.add_argument("--fetch", action="store_true", help="Fetch remote branches")
-    parser.add_argument("--gui", action="store_true", help="Use GUI to change branches")
-    parser.add_argument(
-        "--full-name", action="store_true", help="Use full filename for config table"
-    )
-    args = parser.parse_args()
-
-    command = args.command
-    verbose_output = args.verbose
-    full = args.full
-    fetch = args.fetch
-    version_filter = args.filter
-    show_last_modified = args.show_time
-    full_name = args.full_name
-    gui = args.gui
-    if verbose_output:
-        print(
-            f"Selected Options: verbose={verbose_output}, full={full}, show_last_modified={show_last_modified}"
-        )
-
-    # Check commands
-    if command == "status":
-        # Check if source directory is specified
-        if not args.workspace_directory:
-            print("Workspace directory is not specified, using current directory")
-            workspace_directory = Path(os.getcwd())
-        else:
-            workspace_directory = Path(args.workspace_directory)
-        print(f"Using workspace directory {workspace_directory}")
-        check_workspace_status(
-            workspace_directory,
-            full,
-            verbose_output,
-            show_last_modified,
-            fetch=fetch,
-            gui=gui,
-        )
-    elif command == "wconfig":
-        # Check if source directory is specified
-        if not args.workspace_directory:
-            print("Source directory is not specified, using current directory")
-            workspace_directory = Path(os.getcwd())
-        else:
-            workspace_directory = Path(args.workspace_directory)
-
-        # Check if config file is specified
-        if not args.config:
-            print("Config file is not specified")
-            sys.exit(1)
-        configuration_file_path = args.config[0]
-        compare_workspace_to_config(
-            workspace_directory,
-            configuration_file_path,
-            full,
-            verbose_output,
-            show_last_modified,
-            gui,
-        )
-
-    elif command == "config-list":
-        # Check if config file is specified
-        if not args.config:
-            print("Config file is not specified")
-            sys.exit(1)
-        configuration_files_path = args.config
-
-        compare_config_files(
-            *configuration_files_path,
-            full=full,
-            verbose=verbose_output,
-            show_time=show_last_modified,
-            full_name=full_name,
-        )
-
-    elif command == "config-versions":
-        # Check if config file is specified
-        if not args.config:
-            print("Config file is not specified")
-            sys.exit(1)
-        configuration_file_path = args.config[0]
-        compare_config_versions(
-            configuration_file_path,
-            full=full,
-            verbose=verbose_output,
-            show_time=show_last_modified,
-            version_filter=version_filter,
-        )
-    else:
-        print(f"{command} is not a valid command, see help:")
-        parser.print_help()
-        sys.exit(1)
+    cli()
 
 
 if __name__ == "__main__":
