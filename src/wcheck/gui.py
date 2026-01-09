@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+"""GUI module for wcheck - provides a PySide6-based interface for managing repositories."""
 
 import os
 import sys
 import subprocess
+from typing import NoReturn
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -17,7 +19,21 @@ from PySide6.QtWidgets import (
 from git import Repo
 
 
-def get_repo_head_ref(repo, verbose_output=False):
+def get_repo_head_ref(repo: Repo, verbose_output: bool = False) -> str:
+    """Get the current HEAD reference for a repository.
+
+    Returns the branch name, tag name, or commit SHA depending on the state:
+    - If on a branch: returns branch name
+    - If detached at a tag: returns tag name
+    - If detached at a commit: returns commit SHA
+
+    Args:
+        repo: Git repository object.
+        verbose_output: If True, print additional information about detached HEAD states.
+
+    Returns:
+        String representing the current HEAD reference.
+    """
     if repo.head.is_detached:
         # Use the head commit
         repo_commit = repo.head.commit.hexsha
@@ -39,7 +55,33 @@ def get_repo_head_ref(repo, verbose_output=False):
 
 
 class RepoObject:
-    def __init__(self, repo, repo_name, ignore_remote=False) -> None:
+    """Represents a repository in the GUI with associated widgets and actions.
+
+    Manages the UI components for a single repository including:
+    - Label showing repository name and status
+    - Combo box for branch/tag selection
+    - Checkout button to switch branches
+    - Editor button to open in external editor
+
+    Attributes:
+        repo: The git repository object.
+        repo_dirty: Whether the repository has uncommitted changes.
+        abs_path: Absolute path to the repository.
+        qlabel: QLabel widget showing repository name.
+        combo_box: QComboBox widget for branch selection.
+        checkout_button: QPushButton to checkout selected branch.
+        editor_button: QPushButton to open repository in editor.
+        active_branch: Name of the currently active branch.
+    """
+
+    def __init__(self, repo: Repo, repo_name: str, ignore_remote: bool = False) -> None:
+        """Initialize the RepoObject with repository and UI components.
+
+        Args:
+            repo: Git repository object.
+            repo_name: Display name for the repository.
+            ignore_remote: If True, exclude remote branches from the combo box.
+        """
         # status_str = get_status_repo(repo)
         self.repo_dirty = repo.is_dirty()
 
@@ -66,7 +108,15 @@ class RepoObject:
                 self.combo_box.addItem(str(ref))
         self.combo_box.currentIndexChanged.connect(self.selectionchange)
 
-    def selectionchange(self, index):
+    def selectionchange(self, index: int) -> None:
+        """Handle branch selection change in the combo box.
+
+        Enables the checkout button if a different branch is selected,
+        disables it if the current branch is selected.
+
+        Args:
+            index: Index of the selected item in the combo box.
+        """
         print(f"Selection changed to {self.combo_box.currentText()}")
         branch_name = self.combo_box.currentText()
         if branch_name.startswith("origin/"):
@@ -76,7 +126,12 @@ class RepoObject:
         else:
             self.checkout_button.setEnabled(False)
 
-    def checkout_branch(self):
+    def checkout_branch(self) -> None:
+        """Checkout the selected branch in the repository.
+
+        Handles both local and remote branch names, stripping the 'origin/'
+        prefix from remote branches before checkout.
+        """
         print(
             f"Checkout button pressed for repo {self.repo.working_tree_dir}, current label {self.qlabel.text()}"
         )
@@ -91,7 +146,11 @@ class RepoObject:
         self.active_branch = get_repo_head_ref(self.repo)
         self.selectionchange(0)
 
-    def editor_button_pressed(self):
+    def editor_button_pressed(self) -> None:
+        """Open the repository in an external editor.
+
+        Uses the EDITOR environment variable, defaulting to 'code' (VS Code).
+        """
         print(f"editor button pressed, {self.repo.working_tree_dir}")
         print(f"{self.abs_path}")
         editor_command_name = os.getenv("EDITOR", "code")
@@ -99,16 +158,51 @@ class RepoObject:
 
 
 class WCheckGUI(QWidget):
-    def __init__(self, repos, config_file_path="", config_repo=None):
+    """Main GUI window for wcheck application.
+
+    Displays a grid of repositories with their current branches and
+    provides controls for switching branches and opening in editor.
+
+    Attributes:
+        repo_objects: Dictionary mapping repository names to RepoObject instances.
+    """
+
+    def __init__(
+        self,
+        repos: dict[str, Repo],
+        config_file_path: str = "",
+        config_repo: dict[str, str] | None = None,
+    ) -> None:
+        """Initialize the WCheckGUI window.
+
+        Args:
+            repos: Dictionary mapping repository names to Repo objects.
+            config_file_path: Path to the configuration file (displayed in UI).
+            config_repo: Dictionary mapping repository names to their configured versions.
+        """
         super(WCheckGUI, self).__init__()
         self.initUI(repos, config_file_path, config_repo)
 
     def initUI(
         self,
-        repos: list[Repo],
+        repos: dict[str, Repo],
         config_file_path: str = "",
-        config_repo: dict | None = None,
-    ):
+        config_repo: dict[str, str] | None = None,
+    ) -> None:
+        """Initialize the user interface.
+
+        Creates the layout with repository controls including:
+        - Repository name label
+        - Branch selection combo box
+        - Checkout button
+        - Open in editor button
+        - Config version label (if config_repo provided)
+
+        Args:
+            repos: Dictionary mapping repository names to Repo objects.
+            config_file_path: Path to the configuration file (displayed in UI).
+            config_repo: Dictionary mapping repository names to their configured versions.
+        """
         layout = QVBoxLayout()
         if config_repo is not None:
             layout.addWidget(QLabel(f"Configuration file: {config_file_path}"))
@@ -141,11 +235,23 @@ class WCheckGUI(QWidget):
 
 
 def show_gui(
-    repos: list[Repo], config_file_path: str = "", config_repo: dict | None = None
-):
-    # Create PyQt5 application with the list of repositories
+    repos: dict[str, Repo],
+    config_file_path: str = "",
+    config_repo: dict[str, str] | None = None,
+) -> NoReturn:
+    """Launch the GUI application for managing repositories.
+
+    Creates and displays the main WCheckGUI window. This function does not
+    return as it enters the Qt event loop and exits the program when the
+    window is closed.
+
+    Args:
+        repos: Dictionary mapping repository names to Repo objects.
+        config_file_path: Path to the configuration file (displayed in UI).
+        config_repo: Dictionary mapping repository names to their configured versions.
+    """
     app = QApplication(sys.argv)
     window = WCheckGUI(repos, config_file_path, config_repo)
-    window.setWindowTitle("Worspace Repositories")
+    window.setWindowTitle("Workspace Repositories")
     window.show()
     sys.exit(app.exec())

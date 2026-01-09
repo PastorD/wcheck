@@ -18,8 +18,18 @@ arrow_up = "\u2191"
 arrow_down = "\u2193"
 
 
-def _show_gui(repos, config_file_path="", config_repo=None):
-    """Lazy import and call show_gui to avoid importing PySide6 unless needed."""
+def _show_gui(
+    repos: dict[str, Repo],
+    config_file_path: str = "",
+    config_repo: dict[str, str] | None = None,
+) -> None:
+    """Lazy import and call show_gui to avoid importing PySide6 unless needed.
+
+    Args:
+        repos: Dictionary mapping repository names to Repo objects.
+        config_file_path: Path to the configuration file.
+        config_repo: Dictionary mapping repository names to their configured versions.
+    """
     from wcheck.gui import show_gui
 
     show_gui(repos, config_file_path, config_repo)
@@ -28,15 +38,15 @@ def _show_gui(repos, config_file_path="", config_repo=None):
 ##################################### UTILITLY FUNCTIONS ###################
 
 
-def matches_any(name, patternlist):
-    """Match any of the patterns in patternliss
+def matches_any(name: str, patternlist: list[str] | None) -> bool:
+    """Match any of the patterns in patternlist.
 
     Args:
-        name (str): string to match against
-        patternlist (str list): list of regular expressions to match with
+        name: String to match against.
+        patternlist: List of regular expressions or exact strings to match with.
 
     Returns:
-        bool: if any of the patterns match the string
+        True if any of the patterns match the string, False otherwise.
     """
     if patternlist is None or len(patternlist) == 0:
         return False
@@ -49,7 +59,12 @@ def matches_any(name, patternlist):
     return False
 
 
-def fetch_all(repos):
+def fetch_all(repos: dict[str, Repo]) -> None:
+    """Fetch all remotes for all repositories.
+
+    Args:
+        repos: Dictionary mapping repository names to Repo objects.
+    """
     for repo in repos:
         for remote in repos[repo].remotes:
             print(f"Fetching {remote.name} from {remote.name}")
@@ -58,7 +73,21 @@ def fetch_all(repos):
                 print(f"Fetch {repo}: {fetch_result}")
 
 
-def get_status_repo(repo):
+def get_status_repo(repo: Repo) -> str:
+    """Get a formatted status string for a repository.
+
+    Returns a rich-formatted string showing:
+    - Number of untracked files (U)
+    - Number of modified files (M)
+    - Number of staged files (S)
+    - Number of commits ahead/behind remote
+
+    Args:
+        repo: Git repository object.
+
+    Returns:
+        Formatted status string with rich markup, or empty string if clean.
+    """
     # Check if repo has any commits
     try:
         head_commit = repo.head.commit
@@ -104,7 +133,22 @@ def get_status_repo(repo):
     return print_output
 
 
-def get_repo_head_ref(repo, verbose_output=False):
+def get_repo_head_ref(repo: Repo, verbose_output: bool = False) -> str:
+    """Get the current HEAD reference for a repository.
+
+    Returns the branch name, tag name, or commit SHA depending on the state:
+    - If on a branch: returns branch name
+    - If detached at a tag: returns tag name
+    - If detached at a commit: returns commit SHA
+    - If no commits: returns branch name with '(no commits)' suffix
+
+    Args:
+        repo: Git repository object.
+        verbose_output: If True, print additional information about detached HEAD states.
+
+    Returns:
+        String representing the current HEAD reference.
+    """
     # Check if repo has any commits
     try:
         _ = repo.head.commit
@@ -136,6 +180,21 @@ def get_repo_head_ref(repo, verbose_output=False):
 
 
 def get_remote_status(repo: Repo) -> tuple[int, int]:
+    """Get the number of commits ahead and behind the remote tracking branch.
+
+    Compares the current local branch with its remote tracking branch to determine
+    how many commits need to be pushed and pulled.
+
+    Args:
+        repo: Git repository object.
+
+    Returns:
+        Tuple of (commits_to_push, commits_to_pull). Returns (0, 0) if:
+        - Repository has no commits
+        - HEAD is detached
+        - No remotes configured
+        - Branch is not tracking a remote
+    """
     # Check if repo has any commits
     try:
         _ = repo.head.commit
@@ -217,6 +276,15 @@ def get_remote_status(repo: Repo) -> tuple[int, int]:
 
 
 def get_elapsed_time_repo(repo: Repo) -> str:
+    """Get a human-readable string of time since the last commit.
+
+    Args:
+        repo: Git repository object.
+
+    Returns:
+        Formatted time difference string (e.g., '2 days', '3 hours'),
+        or 'no commits' if repository has no commits.
+    """
     try:
         return pendulum.format_diff(
             pendulum.now() - repo.head.commit.committed_datetime, absolute=True
@@ -226,8 +294,23 @@ def get_elapsed_time_repo(repo: Repo) -> str:
 
 
 def show_repos_config_versions(
-    repos_config_versions: dict, full: bool = False, gui: bool = True
+    repos_config_versions: dict[str, dict[str, str]],
+    full: bool = False,
+    gui: bool = True,
 ) -> None:
+    """Display a table comparing repository versions across configurations.
+
+    Creates a rich table showing repository versions from different sources
+    (e.g., workspace vs config file, or multiple config files). Highlights
+    repositories that differ between versions.
+
+    Args:
+        repos_config_versions: Nested dictionary where outer keys are version/config
+            names and inner dictionaries map repo names to their versions.
+        full: If True, show all repositories. If False, only show repositories
+            that differ between versions.
+        gui: Unused parameter (kept for API compatibility).
+    """
     # Get list with all repositories
     repos_set = set()
     for version_name in repos_config_versions:
@@ -297,7 +380,19 @@ def show_repos_config_versions(
         print("All configurations are identical")
 
 
-def get_workspace_repos(workspace_directory):
+def get_workspace_repos(workspace_directory: Path) -> dict[str, Repo]:
+    """Find all git repositories in a workspace directory.
+
+    Recursively walks the workspace directory and identifies all subdirectories
+    that are git repositories (contain a .git folder).
+
+    Args:
+        workspace_directory: Path to the workspace directory to scan.
+
+    Returns:
+        Dictionary mapping repository directory names to Repo objects.
+        Returns empty dictionary if workspace_directory is not a directory.
+    """
     source_repos = {}
     if not workspace_directory.is_dir():
         print(f"{workspace_directory} is not a directory")
@@ -317,23 +412,25 @@ def get_workspace_repos(workspace_directory):
 
 
 def compare_config_versions(
-    config_filename,
-    full=False,
-    verbose=False,
-    show_time=False,
-    version_filter=None,
-    stash=False,
-):
-    """
-    Compare versions of config files in different repositories
+    config_filename: str,
+    full: bool = False,
+    verbose: bool = False,
+    show_time: bool = False,
+    version_filter: list[str] | None = None,
+    stash: bool = False,
+) -> None:
+    """Compare versions of a config file across different git branches.
+
+    Checks out each branch in the config file's repository and compares
+    the repository versions specified in the config file.
 
     Args:
-        config_filename (str): Name of config file to compare
-        full (bool): If true, compare all versions of the config file
-        verbose (bool): If true, print more information
-        show_time (bool): If true, print elapsed time for each version
-        version_filter (list): regular expression to filter versions to compare
-        stash (bool): If true, stash all repositories before comparing
+        config_filename: Path to the configuration file to compare.
+        full: If True, show all repositories. If False, only show differences.
+        verbose: If True, print additional information during processing.
+        show_time: If True, include modification time in the output.
+        version_filter: List of regex patterns to filter which branches to compare.
+        stash: If True, stash uncommitted changes before switching branches.
     """
 
     print(f"Comparing config versions in {config_filename}")
@@ -410,15 +507,23 @@ def compare_config_versions(
 
 
 def compare_config_files(
-    *config_files, full=False, verbose=False, show_time=False, full_name=False
-):
-    """Compare a list of configuration files
+    *config_files: str,
+    full: bool = False,
+    verbose: bool = False,
+    show_time: bool = False,
+    full_name: bool = False,
+) -> None:
+    """Compare repository versions across multiple configuration files.
+
+    Reads each configuration file and displays a table comparing the
+    repository versions specified in each file.
 
     Args:
-        full (bool, optional): show the full list. Defaults to False.
-        verbose (bool, optional): show more information. Defaults to False.
-        show_time (bool, optional): show last time each configuration file was changed. Defaults to False.
-        full_name (bool, optional): show the configuration filename full path, not only the filename. Defaults to False.
+        *config_files: Variable number of paths to configuration files.
+        full: If True, show all repositories. If False, only show differences.
+        verbose: If True, print additional information during processing.
+        show_time: If True, include modification time in the output.
+        full_name: If True, show full file paths. If False, show only filenames.
     """
 
     repos_config_versions = {}
@@ -445,22 +550,25 @@ def compare_config_files(
 
 
 def check_workspace_status(
-    workspace_directory,
-    full=False,
-    verbose=False,
-    show_time=False,
-    fetch=False,
-    gui=False,
-):
-    """Check the status of all repositories in a workspace
+    workspace_directory: Path,
+    full: bool = False,
+    verbose: bool = False,
+    show_time: bool = False,
+    fetch: bool = False,
+    gui: bool = False,
+) -> None:
+    """Check and display the status of all repositories in a workspace.
+
+    Scans the workspace for git repositories and displays their current
+    branch, uncommitted changes, and remote sync status.
 
     Args:
-        workspace_directory (str): path to the workspace
-        full (bool, optional): show the full list. Defaults to False.
-        verbose (bool, optional): show more information. Defaults to False.
-        show_time (bool, optional): show last time each configuration file was changed. Defaults to False.
-        fetch (bool, optional): fetch all repositories before checking status. Defaults to False.
-        gui (bool, optional): show the GUI. Defaults to False.
+        workspace_directory: Path to the workspace directory containing repositories.
+        full: If True, show all repositories. If False, only show those with changes.
+        verbose: If True, print additional information about each repository.
+        show_time: If True, include time since last commit in the output.
+        fetch: If True, fetch from remotes before checking status.
+        gui: If True, launch the GUI interface instead of console output.
     """
     # Load workspace
     source_repos = get_workspace_repos(workspace_directory)
@@ -493,22 +601,25 @@ def check_workspace_status(
 
 
 def compare_workspace_to_config(
-    workspace_directory,
-    config_filename,
-    full=False,
-    verbose=False,
-    show_time=False,
-    gui=False,
-):
-    """Compare the status of all repositories in a workspace with a configuration file
+    workspace_directory: Path,
+    config_filename: str,
+    full: bool = False,
+    verbose: bool = False,
+    show_time: bool = False,
+    gui: bool = False,
+) -> None:
+    """Compare workspace repository versions with a configuration file.
+
+    Displays a table comparing the current branch/version of each repository
+    in the workspace with the version specified in the configuration file.
 
     Args:
-        workspace_directory (str): path to the workspace
-        config_filename (str): path to the configuration file
-        full (bool, optional): show the full list. Defaults to False.
-        verbose (bool, optional): show more information. Defaults to False.
-        show_time (bool, optional): show last time each configuration file was changed. Defaults to False.
-        gui (bool, optional): show the GUI. Defaults to False.
+        workspace_directory: Path to the workspace directory containing repositories.
+        config_filename: Path to the YAML configuration file specifying expected versions.
+        full: If True, show all repositories. If False, only show mismatches.
+        verbose: If True, print additional information during processing.
+        show_time: If True, include time since last commit in the output.
+        gui: If True, launch the GUI interface instead of console output.
     """
 
     # Load workspace
@@ -695,7 +806,8 @@ def config_versions(config, full, verbose, show_time, version_filter, stash):
     )
 
 
-def main():
+def main() -> None:
+    """Entry point for the wcheck command-line tool."""
     cli()
 
 
