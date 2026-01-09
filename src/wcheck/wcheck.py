@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sys
-import subprocess
 import click
 from pathlib import Path
 import re
@@ -23,6 +21,7 @@ arrow_down = "\u2193"
 def _show_gui(repos, config_file_path="", config_repo=None):
     """Lazy import and call show_gui to avoid importing PySide6 unless needed."""
     from wcheck.gui import show_gui
+
     show_gui(repos, config_file_path, config_repo)
 
 

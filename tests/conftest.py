@@ -1,9 +1,5 @@
 """Pytest fixtures for wcheck tests."""
 
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
 import yaml
 from git import Repo

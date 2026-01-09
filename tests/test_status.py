@@ -1,9 +1,8 @@
 """Tests for the status command."""
 
-import pytest
 from click.testing import CliRunner
 
-from wcheck.wcheck import cli, check_workspace_status, get_workspace_repos
+from wcheck.wcheck import cli, get_workspace_repos
 
 
 class TestStatusCommand:
@@ -22,7 +21,10 @@ class TestStatusCommand:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["status"])
             assert result.exit_code == 0
-            assert "Workspace directory is not specified, using current directory" in result.output
+            assert (
+                "Workspace directory is not specified, using current directory"
+                in result.output
+            )
 
     def test_status_with_workspace(self, temp_workspace):
         """Test status command with a valid workspace."""
@@ -66,7 +68,9 @@ class TestStatusCommand:
         """Test status command with --show-time flag."""
         workspace, repos = temp_workspace
         runner = CliRunner()
-        result = runner.invoke(cli, ["status", "-w", str(workspace), "--show-time", "--full"])
+        result = runner.invoke(
+            cli, ["status", "-w", str(workspace), "--show-time", "--full"]
+        )
         assert result.exit_code == 0
 
 

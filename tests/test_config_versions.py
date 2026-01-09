@@ -1,6 +1,5 @@
 """Tests for the config-versions command."""
 
-import pytest
 import yaml
 from click.testing import CliRunner
 
@@ -42,7 +41,9 @@ class TestConfigVersionsCommand:
         """Test config-versions command with --full flag."""
         repo_path, config_path = config_repo
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-versions", "-c", str(config_path), "--full"])
+        result = runner.invoke(
+            cli, ["config-versions", "-c", str(config_path), "--full"]
+        )
         assert result.exit_code == 0
 
     def test_config_versions_with_verbose_flag(self, config_repo):
@@ -56,14 +57,27 @@ class TestConfigVersionsCommand:
         """Test config-versions command with --filter option."""
         repo_path, config_path = config_repo
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-versions", "-c", str(config_path), "--filter", "main"])
+        result = runner.invoke(
+            cli, ["config-versions", "-c", str(config_path), "--filter", "main"]
+        )
         assert result.exit_code == 0
 
     def test_config_versions_with_multiple_filters(self, config_repo):
         """Test config-versions command with multiple --filter options."""
         repo_path, config_path = config_repo
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-versions", "-c", str(config_path), "--filter", "main", "--filter", "develop"])
+        result = runner.invoke(
+            cli,
+            [
+                "config-versions",
+                "-c",
+                str(config_path),
+                "--filter",
+                "main",
+                "--filter",
+                "develop",
+            ],
+        )
         assert result.exit_code == 0
 
     def test_config_versions_not_in_git_repo(self, tmp_path):
@@ -114,7 +128,9 @@ class TestConfigVersionsCommand:
         repo.index.add(["new_file.txt"])
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-versions", "-c", str(config_path), "--stash"])
+        result = runner.invoke(
+            cli, ["config-versions", "-c", str(config_path), "--stash"]
+        )
         assert result.exit_code == 0
         # Should stash and restore changes
         assert "Stashing" in result.output or "stash" in result.output.lower()
@@ -123,7 +139,9 @@ class TestConfigVersionsCommand:
         """Test config-versions command with --show-time flag."""
         repo_path, config_path = config_repo
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-versions", "-c", str(config_path), "--show-time"])
+        result = runner.invoke(
+            cli, ["config-versions", "-c", str(config_path), "--show-time"]
+        )
         assert result.exit_code == 0
 
 
@@ -136,4 +154,8 @@ class TestCompareConfigVersions:
         compare_config_versions(str(config_path), full=True)
         captured = capsys.readouterr()
         # Should include output about the comparison
-        assert "Comparing" in captured.out or "main" in captured.out or "develop" in captured.out
+        assert (
+            "Comparing" in captured.out
+            or "main" in captured.out
+            or "develop" in captured.out
+        )

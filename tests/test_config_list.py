@@ -1,10 +1,9 @@
 """Tests for the config-list command."""
 
-import pytest
 import yaml
 from click.testing import CliRunner
 
-from wcheck.wcheck import cli, compare_config_files
+from wcheck.wcheck import cli
 
 
 class TestConfigListCommand:
@@ -33,33 +32,60 @@ class TestConfigListCommand:
     def test_config_list_two_configs(self, config_file, config_file_alt):
         """Test config-list command with two config files."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config_file), "-c", str(config_file_alt)])
+        result = runner.invoke(
+            cli, ["config-list", "-c", str(config_file), "-c", str(config_file_alt)]
+        )
         assert result.exit_code == 0
         # Should show differences between configs
 
     def test_config_list_with_full_flag(self, config_file, config_file_alt):
         """Test config-list command with --full flag."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config_file), "-c", str(config_file_alt), "--full"])
+        result = runner.invoke(
+            cli,
+            [
+                "config-list",
+                "-c",
+                str(config_file),
+                "-c",
+                str(config_file_alt),
+                "--full",
+            ],
+        )
         assert result.exit_code == 0
 
     def test_config_list_with_full_name_flag(self, config_file, config_file_alt):
         """Test config-list command with --full-name flag."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config_file), "-c", str(config_file_alt), "--full-name"])
+        result = runner.invoke(
+            cli,
+            [
+                "config-list",
+                "-c",
+                str(config_file),
+                "-c",
+                str(config_file_alt),
+                "--full-name",
+            ],
+        )
         assert result.exit_code == 0
 
     def test_config_list_with_verbose_flag(self, config_file, config_file_alt):
         """Test config-list command with --verbose flag."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config_file), "-c", str(config_file_alt), "-v"])
+        result = runner.invoke(
+            cli,
+            ["config-list", "-c", str(config_file), "-c", str(config_file_alt), "-v"],
+        )
         assert result.exit_code == 0
 
     def test_config_list_nonexistent_config(self, config_file, tmp_path):
         """Test config-list command with a nonexistent config file."""
         nonexistent = tmp_path / "nonexistent.yaml"
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config_file), "-c", str(nonexistent)])
+        result = runner.invoke(
+            cli, ["config-list", "-c", str(config_file), "-c", str(nonexistent)]
+        )
         assert result.exit_code != 0
 
     def test_config_list_identical_configs(self, tmp_path):
@@ -80,7 +106,9 @@ class TestConfigListCommand:
             yaml.dump(config_data, f)
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config1), "-c", str(config2)])
+        result = runner.invoke(
+            cli, ["config-list", "-c", str(config1), "-c", str(config2)]
+        )
         assert result.exit_code == 0
         assert "identical" in result.output.lower()
 
@@ -108,7 +136,9 @@ class TestConfigListCommand:
             yaml.dump(config2_data, f)
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["config-list", "-c", str(config1), "-c", str(config2)])
+        result = runner.invoke(
+            cli, ["config-list", "-c", str(config1), "-c", str(config2)]
+        )
         assert result.exit_code == 0
 
     def test_config_list_three_configs(self, tmp_path):

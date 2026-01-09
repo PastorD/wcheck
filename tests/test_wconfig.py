@@ -1,9 +1,8 @@
 """Tests for the wconfig command."""
 
-import pytest
 from click.testing import CliRunner
 
-from wcheck.wcheck import cli, compare_workspace_to_config
+from wcheck.wcheck import cli
 
 
 class TestWConfigCommand:
@@ -28,7 +27,9 @@ class TestWConfigCommand:
         """Test wconfig command with valid config."""
         workspace, repos = temp_workspace
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(config_file)])
+        result = runner.invoke(
+            cli, ["wconfig", "-w", str(workspace), "-c", str(config_file)]
+        )
         assert result.exit_code == 0
 
     def test_wconfig_default_workspace(self, temp_workspace, config_file):
@@ -38,6 +39,7 @@ class TestWConfigCommand:
         with runner.isolated_filesystem():
             # Copy config to isolated filesystem
             import shutil
+
             config_copy = "config.yaml"
             shutil.copy(config_file, config_copy)
             result = runner.invoke(cli, ["wconfig", "-c", config_copy])
@@ -48,14 +50,18 @@ class TestWConfigCommand:
         """Test wconfig command with --full flag."""
         workspace, repos = temp_workspace
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(config_file), "--full"])
+        result = runner.invoke(
+            cli, ["wconfig", "-w", str(workspace), "-c", str(config_file), "--full"]
+        )
         assert result.exit_code == 0
 
     def test_wconfig_with_verbose_flag(self, temp_workspace, config_file):
         """Test wconfig command with --verbose flag."""
         workspace, repos = temp_workspace
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(config_file), "-v"])
+        result = runner.invoke(
+            cli, ["wconfig", "-w", str(workspace), "-c", str(config_file), "-v"]
+        )
         assert result.exit_code == 0
 
     def test_wconfig_nonexistent_config(self, temp_workspace, tmp_path):
@@ -63,14 +69,19 @@ class TestWConfigCommand:
         workspace, repos = temp_workspace
         nonexistent_config = tmp_path / "nonexistent.yaml"
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(nonexistent_config)])
+        result = runner.invoke(
+            cli, ["wconfig", "-w", str(workspace), "-c", str(nonexistent_config)]
+        )
         assert result.exit_code != 0
 
     def test_wconfig_show_time_flag(self, temp_workspace, config_file):
         """Test wconfig command with --show-time flag."""
         workspace, repos = temp_workspace
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(config_file), "--show-time"])
+        result = runner.invoke(
+            cli,
+            ["wconfig", "-w", str(workspace), "-c", str(config_file), "--show-time"],
+        )
         assert result.exit_code == 0
 
     def test_wconfig_mismatched_versions(self, temp_workspace, tmp_path):
@@ -90,7 +101,9 @@ class TestWConfigCommand:
             yaml.dump(config_data, f)
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["wconfig", "-w", str(workspace), "-c", str(config_path)])
+        result = runner.invoke(
+            cli, ["wconfig", "-w", str(workspace), "-c", str(config_path)]
+        )
         assert result.exit_code == 0
         # The output should show the comparison
         assert "repo_a" in result.output or "Workspace" in result.output
