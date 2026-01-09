@@ -60,8 +60,19 @@ def fetch_all(repos):
 
 
 def get_status_repo(repo):
+    # Check if repo has any commits
+    try:
+        head_commit = repo.head.commit
+        has_commits = True
+    except ValueError:
+        has_commits = False
+
     if (repo.is_dirty()) or len(repo.untracked_files) > 0:
-        n_staged = len(repo.index.diff(repo.head.commit))
+        if has_commits:
+            n_staged = len(repo.index.diff(head_commit))
+        else:
+            # For repos with no commits, all indexed files are "staged"
+            n_staged = len(list(repo.index.entries.keys()))
         n_changes = len(repo.index.diff(None))
         n_untracked = len(repo.untracked_files)
         print_output = " ("
@@ -95,6 +106,16 @@ def get_status_repo(repo):
 
 
 def get_repo_head_ref(repo, verbose_output=False):
+    # Check if repo has any commits
+    try:
+        _ = repo.head.commit
+    except ValueError:
+        # No commits yet, return branch name or "(no commits)"
+        try:
+            return repo.active_branch.name + " (no commits)"
+        except TypeError:
+            return "(no commits)"
+
     if repo.head.is_detached:
         # Use the head commit
         repo_commit = repo.head.commit.hexsha
@@ -116,6 +137,12 @@ def get_repo_head_ref(repo, verbose_output=False):
 
 
 def get_remote_status(repo: Repo) -> tuple[int, int]:
+    # Check if repo has any commits
+    try:
+        _ = repo.head.commit
+    except ValueError:
+        return 0, 0  # no commits yet
+
     if repo.head.is_detached:
         return 0, 0  # no remote status for detached head
 
@@ -191,9 +218,12 @@ def get_remote_status(repo: Repo) -> tuple[int, int]:
 
 
 def get_elapsed_time_repo(repo: Repo) -> str:
-    return pendulum.format_diff(
-        pendulum.now() - repo.head.commit.committed_datetime, absolute=True
-    )
+    try:
+        return pendulum.format_diff(
+            pendulum.now() - repo.head.commit.committed_datetime, absolute=True
+        )
+    except ValueError:
+        return "no commits"
 
 
 def show_repos_config_versions(
