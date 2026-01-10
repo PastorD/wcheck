@@ -35,6 +35,11 @@ dev = [
 gui = [
     "pyside6>=6.4.0",
 ]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
 
 [project.scripts]
 wcheck = 'wcheck.wcheck:main'
