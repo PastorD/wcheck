@@ -1,6 +1,6 @@
 # wcheck
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://dpastorm.github.io/wcheck/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pastord.github.io/wcheck/)
 [![PyPI version](https://badge.fury.io/py/wcheck.svg)](https://badge.fury.io/py/wcheck)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
