@@ -117,6 +117,14 @@ repositories:
     version: v1.0.0
 ```
 
+## Similar Projects
+
+- [vcstool](https://github.com/dirk-thomas/vcstool) - Version control system tool for managing multiple repositories
+- [myrepos](https://myrepos.branchable.com/) - Tool to manage all your version control repos
+- [repo](https://gerrit.googlesource.com/git-repo/) - Google's tool for managing multiple Git repositories
+- [gita](https://github.com/nosarthur/gita) - Manage multiple Git repos with ease
+- [mu-repo](https://github.com/fabioz/mu-repo) - Tool to work with multiple Git repositories
+
 ## Documentation
 
 📖 **Full documentation:** [https://dpastorm.github.io/wcheck/](https://dpastorm.github.io/wcheck/)
