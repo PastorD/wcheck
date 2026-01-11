@@ -1,6 +1,6 @@
 # wcheck
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://dpastorm.github.io/wcheck/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pastord.github.io/wcheck/)
 [![PyPI version](https://badge.fury.io/py/wcheck.svg)](https://badge.fury.io/py/wcheck)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -116,6 +116,14 @@ repositories:
     url: https://github.com/user/another-repo.git
     version: v1.0.0
 ```
+
+## Similar Projects
+
+- [vcstool](https://github.com/dirk-thomas/vcstool) - Version control system tool for managing multiple repositories
+- [myrepos](https://myrepos.branchable.com/) - Tool to manage all your version control repos
+- [repo](https://gerrit.googlesource.com/git-repo/) - Google's tool for managing multiple Git repositories
+- [gita](https://github.com/nosarthur/gita) - Manage multiple Git repos with ease
+- [mu-repo](https://github.com/fabioz/mu-repo) - Tool to work with multiple Git repositories
 
 ## Documentation
 

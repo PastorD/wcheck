@@ -1,8 +1,9 @@
 site_name: wcheck
 site_description: Manage a workspace of git repositories
+site_url: https://pastord.github.io/wcheck/
 site_author: Daniel Pastor
-repo_url: https://github.com/dpastorm/wcheck
-repo_name: dpastorm/wcheck
+repo_url: https://github.com/PastorD/wcheck
+repo_name: PastorD/wcheck
 
 theme:
   name: material
