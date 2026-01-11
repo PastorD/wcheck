@@ -1,0 +1,34 @@
+# Automate releases using Release Please
+# Uses Conventional Commits to determine version bumps:
+#   - fix: patch (0.0.x)
+#   - feat: minor (0.x.0)
+#   - feat!: or BREAKING CHANGE: major (x.0.0)
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    # Only run on push OR merged PRs (not closed-without-merge)
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: python
