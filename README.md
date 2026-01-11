@@ -1,100 +1,154 @@
-# Workspace Check (wcheck)
+# wcheck
 
-Compares diffent workspaces of git repositories and reports their differences. Two types of workspaces are supported:
-- local workspace in a directory, represented by the current git status of each repository
-- workspace defined by a vcs file
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://dpastorm.github.io/wcheck/)
+[![PyPI version](https://badge.fury.io/py/wcheck.svg)](https://badge.fury.io/py/wcheck)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Possible comparisions:
-- compare local workspace against a configuration file (command=wconfig)
-- compare two configuration files, e.g. robot_A.vcs with robot_B.vcs (command=config-list)
-- compare all git references of a configurion file, this includes all active branches and tags (command=config-versions)
+**Manage a workspace of git repositories**
+
+wcheck compares different workspaces of git repositories and reports their differences. It supports:
+
+- **Local workspaces** - directories containing multiple git repositories
+- **Configuration files** - YAML files defining expected repository versions (vcstool format)
+
+## Features
+
+- 🔍 Check status of all repositories in a workspace
+- 📊 Compare workspace against configuration files
+- 🔄 Compare multiple configuration files
+- 📈 Track version changes across git branches
+- 🖥️ Optional GUI for branch management
 
 ## Installation
 
-Easiest way to install is using `pipx`, which will install the package in an isolated environment, ensuring it does not interfere with other packages:
+**Using uv (recommended):**
 ```bash
-pipx install wcheck
-```
-To install `pipx`, follow the [instructions](https://pipx.pypa.io/stable/installation/) for your distribution. For example, in Ubuntu you can install it with:
-```bash
-sudo apt install pipx
-pipx ensurepath
+uv tool install wcheck
 ```
 
-Alternatively, you can install it using pip:
+**Using pip:**
 ```bash
 pip install wcheck
 ```
 
-
-## Usage
-
-General usage
+**With GUI support:**
 ```bash
-wcheck <command> <parameters>
+pip install wcheck[gui]
 ```
-Command options: status (default), wconfig, config-list, config-versions
 
-Check workspace status
+## Quick Start
+
+### Check Workspace Status
+
 ```bash
-wcheck status [-w <workspace_location>] [-f,--full] [--gui] [-v,--verbose] [--show-time] 
+wcheck status
 ```
-It will show the git status of each repository. The legend is as follows:
-- U: number of untracked files 
-- M: number of changed files
-- S: number of staged files
-- ↓(arrow down): number of commits to pull
-- ↑(arrow up): number of commits to push.
 
-Workspace location can be specified with argument _-w_, if not provided, it will use current location. 
+Output:
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Repo Name             ┃ Current Workspace         ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ my-project (2M 1U)    │ feature/new-feature       │
+│ another-repo (1↑)     │ main                      │
+└───────────────────────┴───────────────────────────┘
+```
 
-Compare workspace to a configuration file:
+**Status indicators:**
+- `U` - Untracked files
+- `M` - Modified files  
+- `S` - Staged files
+- `↑` - Commits to push
+- `↓` - Commits to pull
+
+### Compare with Configuration
+
 ```bash
-wcheck wconfig -c <config_file> [--gui] [-v] [--show-time]
+wcheck wconfig -c workspace.yaml
 ```
-The configuration file uses VCSTOOL structure, see an overview below
 
-Compare multiple configuration files
+### Compare Multiple Configs
+
 ```bash
-wcheck config-list -c <config_A> <config_B> .. <config_N>
+wcheck config-list -c robot_a.yaml -c robot_b.yaml
 ```
-It will show a table comparing all configuration files.
 
-Compare git references (branches and tags), of the configuration file
+### Compare Across Branches
+
 ```bash
-wcheck config-versions -c <config> [-h] [--full] [-v] [--show-time] [--full-path]
-```
-It will show a table comparing all versions of the configuration file.
-
-Optional arguments
-```
-  -v --verbose: verbose output
-  -h --help: show help
-  --full: show full output, not only differences
-  --gui: show graphical user interface
-  --show-time: show elapsed time since last commit and reference creation
-  --fetch: fetch repositories before comparing
-  --full-path: show full path for each configuration file
+wcheck config-versions -c workspace.yaml
 ```
 
-## VCSTOOL Overview
+## Commands
 
-This repo is based on vcstool (do not confuse with [vctools](https://github.com/vcstools/vcstools/), a similar but deprecated tool for working with vcs files). A workspace is defined with a yaml file describing each repository
+| Command | Description |
+|---------|-------------|
+| `status` | Check status of repositories in workspace |
+| `wconfig` | Compare workspace to configuration file |
+| `config-list` | Compare multiple configuration files |
+| `config-versions` | Compare config across git branches |
+
+## Common Options
+
+| Option | Description |
+|--------|-------------|
+| `-w, --workspace-directory` | Workspace path (default: current dir) |
+| `-c, --config` | Configuration file path |
+| `-f, --full` | Show all repos, not just differences |
+| `-v, --verbose` | Verbose output |
+| `--show-time` | Show time since last commit |
+| `--fetch` | Fetch remotes before checking |
+| `--gui` | Launch graphical interface |
+
+## Configuration File Format
+
+wcheck uses [vcstool](https://github.com/dirk-thomas/vcstool)-compatible YAML files:
 
 ```yaml
-  repositories:
-    <repo directory name>:
-      type: <repo type>
-      url: <repo url>
-      version: <repo version>
+repositories:
+  my-project:
+    type: git
+    url: git@github.com:user/my-project.git
+    version: main
+  
+  another-repo:
+    type: git
+    url: https://github.com/user/another-repo.git
+    version: v1.0.0
 ```
 
-where *repo directory name* is the name of the directory where the repo is cloned to (including parent folders in any), *repo url* is the url of the repo (using git or https), *repo type* is the type of repo (git, hg, svn, bzr, etc), and *repo version* is the version of the repo to check against, specified as a branch name, tag name, or commit hash. Example:
+## Documentation
 
-```yaml
-  repositories:
-    vcstool:
-      type: git
-      url: git@github.com:dirk-thomas/vcstool.git
-      version: master
+📖 **Full documentation:** [https://dpastorm.github.io/wcheck/](https://dpastorm.github.io/wcheck/)
+
+- [Installation Guide](https://dpastorm.github.io/wcheck/installation/)
+- [Quick Start](https://dpastorm.github.io/wcheck/quickstart/)
+- [CLI Reference](https://dpastorm.github.io/wcheck/cli/)
+- [Configuration Files](https://dpastorm.github.io/wcheck/configuration/)
+- [API Reference](https://dpastorm.github.io/wcheck/api/)
+
+## Development
+
+```bash
+# Clone repository
+git clone https://github.com/dpastorm/wcheck.git
+cd wcheck
+
+# Install with dev dependencies
+uv sync --extra dev
+
+# Run tests
+uv run pytest
+
+# Build documentation locally
+uv sync --extra docs
+uv run mkdocs serve
 ```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Author
+
+Daniel Pastor (danpasmor@gmail.com)
