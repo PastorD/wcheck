@@ -11,9 +11,10 @@ wcheck compares different workspaces of git repositories and reports their diffe
 ## Quick Install
 
 ```bash
-uv tool install wcheck       # Basic
-uv tool install wcheck[gui]  # With GUI (PySide6)
-uv tool install wcheck[tui]  # With TUI (Textual)
+uv tool install wcheck          # Basic
+uv tool install 'wcheck[gui]'   # With GUI (PySide6)
+uv tool install 'wcheck[tui]'   # With TUI (Textual)
+uv tool install 'wcheck[gui,tui]'  # With both
 ```
 
 ## Quick Example

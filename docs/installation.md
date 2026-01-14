@@ -61,6 +61,13 @@ uv tool install 'wcheck[tui]'
 
 Then use `--tui` flag with `status` or `wconfig` commands.
 
+### Both GUI and TUI
+
+```bash
+uv tool install 'wcheck[gui,tui]'
+# or: pip install 'wcheck[gui,tui]'
+```
+
 ### Development Dependencies
 
 ```bash
