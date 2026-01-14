@@ -600,6 +600,70 @@ def check_workspace_status(
     show_repos_config_versions(workspace_current_branch_version, full=True)
 
 
+def compare_workspaces(
+    workspace_directories: tuple[Path, ...],
+    full: bool = False,
+    verbose: bool = False,
+    show_time: bool = False,
+    fetch: bool = False,
+) -> None:
+    """Compare repository statuses across multiple workspaces.
+
+    Displays a side-by-side table showing the branch and status of each
+    repository across different workspaces. Useful for comparing the same
+    set of repositories in different environments or configurations.
+
+    Args:
+        workspace_directories: Tuple of workspace directory paths to compare.
+        full: If True, show all repositories. If False, only show those with
+            differences or changes.
+        verbose: If True, print additional information about each repository.
+        show_time: If True, include time since last commit in the output.
+        fetch: If True, fetch from remotes before checking status.
+    """
+    repos_by_workspace: dict[str, dict[str, str]] = {}
+
+    # Use basename for column names, with disambiguation for duplicates
+    workspace_names: list[str] = []
+    for ws_path in workspace_directories:
+        name = ws_path.name
+        # If duplicate basename, use parent/name
+        count = sum(1 for w in workspace_directories if w.name == name)
+        if count > 1:
+            name = f"{ws_path.parent.name}/{name}"
+        workspace_names.append(name)
+
+    # Collect repos from each workspace
+    for i, workspace_directory in enumerate(workspace_directories):
+        ws_name = workspace_names[i]
+        click.echo(f"Scanning workspace: {workspace_directory}")
+        source_repos = get_workspace_repos(workspace_directory)
+
+        if fetch:
+            for repo_name in source_repos:
+                for remote in source_repos[repo_name].remotes:
+                    remote.fetch()
+
+        repos_by_workspace[ws_name] = {}
+        for repo_name in source_repos:
+            repo = source_repos[repo_name]
+            branch = get_repo_head_ref(repo, verbose)
+            status_str = get_status_repo(repo)
+
+            # Format: "branch (status)" or just "branch" if clean
+            if status_str:
+                display_value = f"{branch}{status_str}"
+            else:
+                display_value = branch
+
+            if show_time:
+                display_value += f" ({get_elapsed_time_repo(repo)})"
+
+            repos_by_workspace[ws_name][repo_name] = display_value
+
+    show_repos_config_versions(repos_by_workspace, full)
+
+
 def compare_workspace_to_config(
     workspace_directory: Path,
     config_filename: str,
@@ -671,9 +735,10 @@ def cli():
 @click.option(
     "-w",
     "--workspace-directory",
+    "workspace_directories",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
-    default=None,
-    help="Workspace directory. Use current directory if not specified",
+    multiple=True,
+    help="Workspace directory. Can be specified multiple times to compare workspaces. Uses current directory if not specified.",
 )
 @click.option(
     "-f",
@@ -685,20 +750,43 @@ def cli():
 @click.option("--show-time", is_flag=True, help="Show last modified time")
 @click.option("--fetch", is_flag=True, help="Fetch remote branches")
 @click.option("--gui", is_flag=True, help="Use GUI to change branches")
-def status(workspace_directory, full, verbose, show_time, fetch, gui):
-    """Check the status of all repositories in a workspace."""
-    if not workspace_directory:
+def status(workspace_directories, full, verbose, show_time, fetch, gui):
+    """Check the status of all repositories in a workspace.
+
+    When a single workspace is specified (or none, using current directory),
+    shows the status of each repository.
+
+    When multiple workspaces are specified with multiple -w options,
+    displays a side-by-side comparison table.
+    """
+    if not workspace_directories:
         click.echo("Workspace directory is not specified, using current directory")
-        workspace_directory = Path(os.getcwd())
-    click.echo(f"Using workspace directory {workspace_directory}")
-    check_workspace_status(
-        workspace_directory,
-        full,
-        verbose,
-        show_time,
-        fetch=fetch,
-        gui=gui,
-    )
+        workspace_directories = (Path(os.getcwd()),)
+
+    if len(workspace_directories) == 1:
+        # Single workspace: use original behavior
+        click.echo(f"Using workspace directory {workspace_directories[0]}")
+        check_workspace_status(
+            workspace_directories[0],
+            full,
+            verbose,
+            show_time,
+            fetch=fetch,
+            gui=gui,
+        )
+    else:
+        # Multiple workspaces: compare side by side
+        if gui:
+            click.echo("GUI mode is not supported for multi-workspace comparison")
+            return
+        click.echo(f"Comparing {len(workspace_directories)} workspaces")
+        compare_workspaces(
+            workspace_directories,
+            full,
+            verbose,
+            show_time,
+            fetch=fetch,
+        )
 
 
 @cli.command()
