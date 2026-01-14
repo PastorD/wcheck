@@ -48,7 +48,15 @@ wcheck wconfig -c workspace.yaml
 wcheck config-list -c robot_a.yaml -c robot_b.yaml
 ```
 
-### 4. Interactive Interface
+### 4. Compare Multiple Workspaces
+
+Compare the same repositories across different directories:
+
+```bash
+wcheck status -w /path/to/workspace1 -w /path/to/workspace2
+```
+
+### 5. Interactive Interface
 
 Use the TUI for interactive branch management:
 

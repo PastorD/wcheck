@@ -67,6 +67,24 @@ wcheck status --fetch --show-time
 wcheck status --gui
 ```
 
+**Compare multiple workspaces side by side:**
+
+```bash
+wcheck status -w /path/to/workspace1 -w /path/to/workspace2
+```
+
+This displays a table with one column per workspace, showing branch differences:
+
+```
+Comparing 2 workspaces
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ Repo Name     ┃ workspace1     ┃ workspace2     ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ project-a     │ main           │ develop        │
+│ project-b     │ v1.0.0 (2M)    │ v1.1.0         │
+└───────────────┴────────────────┴────────────────┘
+```
+
 ### Output
 
 ```
