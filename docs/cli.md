@@ -33,6 +33,7 @@ wcheck status [OPTIONS]
 | `--show-time` | flag | Show time since last commit |
 | `--fetch` | flag | Fetch from remotes before checking status |
 | `--gui` | flag | Launch GUI interface |
+| `--tui` | flag | Launch TUI interface |
 
 ### Examples
 
@@ -64,6 +65,24 @@ wcheck status --fetch --show-time
 
 ```bash
 wcheck status --gui
+```
+
+**Compare multiple workspaces side by side:**
+
+```bash
+wcheck status -w /path/to/workspace1 -w /path/to/workspace2
+```
+
+This displays a table with one column per workspace, showing branch differences:
+
+```
+Comparing 2 workspaces
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ Repo Name     ┃ workspace1     ┃ workspace2     ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ project-a     │ main           │ develop        │
+│ project-b     │ v1.0.0 (2M)    │ v1.1.0         │
+└───────────────┴────────────────┴────────────────┘
 ```
 
 ### Output
@@ -107,6 +126,7 @@ wcheck wconfig [OPTIONS]
 | `-v, --verbose` | flag | Show more detailed information |
 | `--show-time` | flag | Show time since last commit |
 | `--gui` | flag | Launch GUI interface |
+| `--tui` | flag | Launch TUI interface |
 
 ### Examples
 
@@ -261,18 +281,47 @@ Comparing config versions in workspace.yaml
 
 ## GUI Mode
 
-When using `--gui` with `status` or `wconfig`, a graphical interface opens.
+The `--gui` flag (with `status` or `wconfig`) opens a graphical interface.
 
-The GUI provides:
+**Features:**
 
-- **Branch selector** - Dropdown to select branches/tags
-- **Checkout button** - Switch to selected branch
-- **Editor button** - Open repository in your editor (uses `$EDITOR` or VS Code)
-- **Status indicators** - Visual highlighting for dirty repositories
-- **Config comparison** - Shows expected vs actual versions (in wconfig mode)
+- Branch selector dropdown
+- Checkout button
+- Open in editor button
+- Visual status indicators
+- Config version comparison
 
-!!! note "GUI Requirements"
-    The GUI requires the optional `gui` dependencies. Install with:
-    ```bash
-    pip install wcheck[gui]
-    ```
+!!! note "Requirements"
+    Install with: `pip install wcheck[gui]`
+
+---
+
+## TUI Mode
+
+The `--tui` flag (with `status` or `wconfig`) opens an interactive terminal interface.
+
+```bash
+wcheck status --tui
+wcheck wconfig -c config.yaml --tui
+```
+
+**Key bindings:**
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Navigate repositories |
+| `Enter` | Open branch selection |
+| `b` | Select branch (alternative) |
+| `e` | Open in editor (`$EDITOR`) |
+| `r` | Refresh |
+| `q` | Quit |
+
+**Features:**
+
+- Repository table with status indicators
+- Branch selection modal
+- Config version comparison (in wconfig mode)
+- Keyboard-driven navigation
+
+!!! note "Requirements"
+    Install with: `pip install wcheck[tui]`
