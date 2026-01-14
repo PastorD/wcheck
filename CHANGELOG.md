@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/PastorD/wcheck/compare/v0.5.0...v0.5.1) (2026-01-14)
+
+
+### Bug Fixes
+
+* fix release workflow ([b16ce0e](https://github.com/PastorD/wcheck/commit/b16ce0e9c148b0878951e28f1b9c2814d1b6e6d8))
+* id token ([e61edeb](https://github.com/PastorD/wcheck/commit/e61edeb116bb27b3a537c9acdb5a61a98512736f))
+* id token ([56cab6d](https://github.com/PastorD/wcheck/commit/56cab6d3392c986664f0f82a550b56e347baf2e0))
+
 ## [0.5.0](https://github.com/PastorD/wcheck/compare/v0.4.0...v0.5.0) (2026-01-14)
 
 
