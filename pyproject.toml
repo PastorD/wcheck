@@ -47,6 +47,13 @@ docs = [
 [project.scripts]
 wcheck = 'wcheck.wcheck:main'
 
+[project.urls]
+Homepage = "https://github.com/PastorD/wcheck"
+Documentation = "https://pastord.github.io/wcheck/"
+Repository = "https://github.com/PastorD/wcheck"
+Issues = "https://github.com/PastorD/wcheck/issues"
+Changelog = "https://github.com/PastorD/wcheck/blob/main/CHANGELOG.md"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
