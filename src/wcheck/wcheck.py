@@ -35,6 +35,23 @@ def _show_gui(
     show_gui(repos, config_file_path, config_repo)
 
 
+def _show_tui(
+    repos: dict[str, Repo],
+    config_file_path: str = "",
+    config_repo: dict[str, str] | None = None,
+) -> None:
+    """Lazy import and call show_tui to avoid importing Textual unless needed.
+
+    Args:
+        repos: Dictionary mapping repository names to Repo objects.
+        config_file_path: Path to the configuration file.
+        config_repo: Dictionary mapping repository names to their configured versions.
+    """
+    from wcheck.tui import show_tui
+
+    show_tui(repos, config_file_path, config_repo)
+
+
 ##################################### UTILITLY FUNCTIONS ###################
 
 
@@ -556,6 +573,7 @@ def check_workspace_status(
     show_time: bool = False,
     fetch: bool = False,
     gui: bool = False,
+    tui: bool = False,
 ) -> None:
     """Check and display the status of all repositories in a workspace.
 
@@ -569,12 +587,18 @@ def check_workspace_status(
         show_time: If True, include time since last commit in the output.
         fetch: If True, fetch from remotes before checking status.
         gui: If True, launch the GUI interface instead of console output.
+        tui: If True, launch the TUI interface instead of console output.
     """
     # Load workspace
     source_repos = get_workspace_repos(workspace_directory)
 
     if gui:
         _show_gui(source_repos)
+        return
+
+    if tui:
+        _show_tui(source_repos)
+        return
 
     if fetch:
         for repo_name in source_repos:
@@ -671,6 +695,7 @@ def compare_workspace_to_config(
     verbose: bool = False,
     show_time: bool = False,
     gui: bool = False,
+    tui: bool = False,
 ) -> None:
     """Compare workspace repository versions with a configuration file.
 
@@ -684,6 +709,7 @@ def compare_workspace_to_config(
         verbose: If True, print additional information during processing.
         show_time: If True, include time since last commit in the output.
         gui: If True, launch the GUI interface instead of console output.
+        tui: If True, launch the TUI interface instead of console output.
     """
 
     # Load workspace
@@ -714,6 +740,11 @@ def compare_workspace_to_config(
 
     if gui:
         _show_gui(source_repos, config_filename, config_file_version)
+        return
+
+    if tui:
+        _show_tui(source_repos, config_filename, config_file_version)
+        return
 
     repos_workspace_config_versions = {}
     repos_workspace_config_versions["Workspace version"] = (
@@ -750,7 +781,8 @@ def cli():
 @click.option("--show-time", is_flag=True, help="Show last modified time")
 @click.option("--fetch", is_flag=True, help="Fetch remote branches")
 @click.option("--gui", is_flag=True, help="Use GUI to change branches")
-def status(workspace_directories, full, verbose, show_time, fetch, gui):
+@click.option("--tui", is_flag=True, help="Use TUI to change branches")
+def status(workspace_directories, full, verbose, show_time, fetch, gui, tui):
     """Check the status of all repositories in a workspace.
 
     When a single workspace is specified (or none, using current directory),
@@ -773,11 +805,12 @@ def status(workspace_directories, full, verbose, show_time, fetch, gui):
             show_time,
             fetch=fetch,
             gui=gui,
+            tui=tui,
         )
     else:
         # Multiple workspaces: compare side by side
-        if gui:
-            click.echo("GUI mode is not supported for multi-workspace comparison")
+        if gui or tui:
+            click.echo("GUI/TUI mode is not supported for multi-workspace comparison")
             return
         click.echo(f"Comparing {len(workspace_directories)} workspaces")
         compare_workspaces(
@@ -813,7 +846,8 @@ def status(workspace_directories, full, verbose, show_time, fetch, gui):
 @click.option("-v", "--verbose", is_flag=True, help="Show more information")
 @click.option("--show-time", is_flag=True, help="Show last modified time")
 @click.option("--gui", is_flag=True, help="Use GUI to change branches")
-def wconfig(workspace_directory, config, full, verbose, show_time, gui):
+@click.option("--tui", is_flag=True, help="Use TUI to change branches")
+def wconfig(workspace_directory, config, full, verbose, show_time, gui, tui):
     """Compare the workspace with a configuration file."""
     if not workspace_directory:
         click.echo("Source directory is not specified, using current directory")
@@ -825,6 +859,7 @@ def wconfig(workspace_directory, config, full, verbose, show_time, gui):
         verbose,
         show_time,
         gui,
+        tui,
     )
 
 

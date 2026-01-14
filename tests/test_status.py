@@ -181,7 +181,7 @@ class TestMultiWorkspaceComparison:
         assert "shared_repo" in result.output
 
     def test_status_multiple_workspaces_gui_not_supported(self, tmp_path):
-        """Test that GUI mode is not supported for multi-workspace comparison."""
+        """Test that GUI/TUI mode is not supported for multi-workspace comparison."""
         workspace1 = tmp_path / "ws1"
         workspace2 = tmp_path / "ws2"
         workspace1.mkdir()
@@ -192,7 +192,14 @@ class TestMultiWorkspaceComparison:
             cli,
             ["status", "-w", str(workspace1), "-w", str(workspace2), "--gui"],
         )
-        assert "GUI mode is not supported for multi-workspace comparison" in result.output
+        assert "GUI/TUI mode is not supported for multi-workspace comparison" in result.output
+
+        # Also test with --tui flag
+        result = runner.invoke(
+            cli,
+            ["status", "-w", str(workspace1), "-w", str(workspace2), "--tui"],
+        )
+        assert "GUI/TUI mode is not supported for multi-workspace comparison" in result.output
 
     def test_status_single_workspace_unchanged_behavior(self, temp_workspace):
         """Test that single workspace behavior is unchanged."""
