@@ -2,6 +2,7 @@
 
 import os
 import click
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import re
 
@@ -200,7 +201,8 @@ def get_remote_status(repo: Repo) -> tuple[int, int]:
     """Get the number of commits ahead and behind the remote tracking branch.
 
     Compares the current local branch with its remote tracking branch to determine
-    how many commits need to be pushed and pulled.
+    how many commits need to be pushed and pulled. Uses efficient iter_commits
+    with range notation.
 
     Args:
         repo: Git repository object.
@@ -225,71 +227,24 @@ def get_remote_status(repo: Repo) -> tuple[int, int]:
     if not repo.remotes:
         return 0, 0  # no remotes configured
 
-    # Find index for remote branch matching current branch
-    found_remote_ref = False
-    index_remote = 0
-    index_ref = 0
-    for index_remote, remote in enumerate(repo.remotes):
-        for index_ref, ref in enumerate(remote.refs):
-            if ref.name == remote.name + "/" + repo.active_branch.name:
-                found_remote_ref = True
-                break
-        if found_remote_ref:
-            break
-    if not found_remote_ref:
-        return 0, 0  # branch not tracked by any remote
+    # Try to get tracking branch using GitPython's built-in method
+    try:
+        branch = repo.active_branch
+        tracking = branch.tracking_branch()
 
-    # Get remote commit
-    remote_commit = repo.remotes[index_remote].refs[index_ref].commit
-    commits_remote_accumulated = [remote_commit]
-    # commits_remote_frontier = [remote_commit]
+        if tracking is None:
+            return 0, 0  # branch not tracking a remote
 
-    # Get local commit
-    local_commit = repo.head.commit
-    commits_local_accumulated = [local_commit]
-    # commits_local_frontier = [local_commit]
+        # Use efficient iter_commits with range notation
+        # Commits ahead (local commits not in remote)
+        ahead = sum(1 for _ in repo.iter_commits(f"{tracking.name}..{branch.name}"))
 
-    if local_commit.hexsha == remote_commit.hexsha:
-        # print (f"Branch {repo.active_branch.name} is up to date with remote {remote.name}")
+        # Commits behind (remote commits not in local)
+        behind = sum(1 for _ in repo.iter_commits(f"{branch.name}..{tracking.name}"))
+
+        return ahead, behind
+    except Exception:
         return 0, 0
-    else:
-        # Revert commits in local and remote repo to find common ancestor
-        found_common_ancestor = False
-        while not found_common_ancestor:
-            if len(local_commit.parents) > 0:
-                # for parent in local_commit.parents:
-                #     commits_local_frontier.append(parent)
-                # local_commit = commits_local_frontier
-                # print(f"len parents {len(local_commit.parents)}")
-                # if local_parent in commits_local_accumulated:
-                #     break
-                # commits_local_accumulated.append(local_parent)
-                # local_commit = local_parent
-
-                local_commit = local_commit.parents[0]
-                for i, commit_remote_to_check in enumerate(commits_remote_accumulated):
-                    if local_commit.hexsha == commit_remote_to_check.hexsha:
-                        push_counter = len(commits_local_accumulated)
-                        pull_counter = i
-                        found_common_ancestor = True
-                        break
-                commits_local_accumulated.append(local_commit)
-
-            if len(remote_commit.parents) > 0:
-                # for parent in remote_commit.parents:
-                #     commits_remote_frontier.append(parent)
-                # remote_commit = commits_remote_frontier.pop()
-                remote_commit = remote_commit.parents[0]
-                for i, commit_local_to_check in enumerate(commits_local_accumulated):
-                    if remote_commit.hexsha == commit_local_to_check.hexsha:
-                        pull_counter = len(commits_remote_accumulated)
-                        push_counter = i
-                        found_common_ancestor = True
-                        break
-
-                commits_remote_accumulated.append(remote_commit)
-
-        return push_counter, pull_counter
 
 
 def get_elapsed_time_repo(repo: Repo) -> str:
@@ -400,8 +355,9 @@ def show_repos_config_versions(
 def get_workspace_repos(workspace_directory: Path) -> dict[str, Repo]:
     """Find all git repositories in a workspace directory.
 
-    Recursively walks the workspace directory and identifies all subdirectories
-    that are git repositories (contain a .git folder).
+    Walks the workspace directory and identifies all subdirectories
+    that are git repositories (contain a .git folder). Skips nested
+    repositories for efficiency.
 
     Args:
         workspace_directory: Path to the workspace directory to scan.
@@ -417,12 +373,62 @@ def get_workspace_repos(workspace_directory: Path) -> dict[str, Repo]:
 
     # Gather all repositories in source directory
     for root, dirs, files in os.walk(workspace_directory):
+        # Check each subdirectory
+        dirs_to_remove = []
         for dir_in_source in dirs:
             d = Path(root) / dir_in_source
             # Check if directory is a git repository
-            if d.is_dir() and (d / ".git").exists():
+            if (d / ".git").exists():
                 source_repos[dir_in_source] = Repo(d)
+                # Don't descend into git repos (skip nested repos)
+                dirs_to_remove.append(dir_in_source)
+        # Remove git repos from dirs to prevent descending
+        for d in dirs_to_remove:
+            dirs.remove(d)
     return source_repos
+
+
+def get_repo_info_parallel(
+    repos: dict[str, Repo], include_status: bool = True, include_time: bool = False
+) -> dict[str, dict]:
+    """Get repository info for multiple repos in parallel.
+
+    Args:
+        repos: Dictionary mapping repository names to Repo objects.
+        include_status: If True, include status (dirty/untracked/ahead/behind).
+        include_time: If True, include time since last commit.
+
+    Returns:
+        Dictionary mapping repo names to their info dictionaries.
+    """
+
+    def get_single_repo_info(repo_name: str, repo: Repo) -> tuple[str, dict]:
+        """Get info for a single repository."""
+        info = {
+            "head_ref": get_repo_head_ref(repo),
+            "status": "",
+            "elapsed_time": "",
+        }
+        if include_status:
+            info["status"] = get_status_repo(repo)
+        if include_time:
+            info["elapsed_time"] = get_elapsed_time_repo(repo)
+        return repo_name, info
+
+    if not repos:
+        return {}
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(repos), 8)) as executor:
+        futures = {
+            executor.submit(get_single_repo_info, name, repo): name
+            for name, repo in repos.items()
+        }
+        for future in as_completed(futures):
+            repo_name, info = future.result()
+            results[repo_name] = info
+
+    return results
 
 
 ######################################### COMMANDS #################################################
@@ -600,26 +606,30 @@ def check_workspace_status(
         _show_tui(source_repos)
         return
 
-    if fetch:
-        for repo_name in source_repos:
-            for remote in source_repos[repo_name].remotes:
+    if fetch and source_repos:
+        # Fetch in parallel
+        def fetch_repo(repo: Repo) -> None:
+            for remote in repo.remotes:
                 remote.fetch()
+
+        with ThreadPoolExecutor(max_workers=min(len(source_repos), 8)) as executor:
+            executor.map(fetch_repo, source_repos.values())
+
+    # Get repo info in parallel
+    repo_info = get_repo_info_parallel(source_repos, include_status=True, include_time=show_time)
 
     # Get current branch for each repo
     workspace_current_branch_version = {}
     workspace_current_branch_version["Current Workspace"] = {}
-    for repo_name in source_repos:
-        status_str = get_status_repo(source_repos[repo_name])
+    for repo_name in sorted(repo_info.keys()):
+        info = repo_info[repo_name]
+        status_str = info["status"]
         if not full and status_str == "":
             continue
         repo_display_name = repo_name + status_str
         if show_time:
-            repo_display_name += (
-                " (" + get_elapsed_time_repo(source_repos[repo_name]) + ")"
-            )
-        workspace_current_branch_version["Current Workspace"][repo_display_name] = (
-            get_repo_head_ref(source_repos[repo_name], verbose)
-        )
+            repo_display_name += " (" + info["elapsed_time"] + ")"
+        workspace_current_branch_version["Current Workspace"][repo_display_name] = info["head_ref"]
 
     show_repos_config_versions(workspace_current_branch_version, full=True)
 
@@ -657,22 +667,29 @@ def compare_workspaces(
             name = f"{ws_path.parent.name}/{name}"
         workspace_names.append(name)
 
-    # Collect repos from each workspace
-    for i, workspace_directory in enumerate(workspace_directories):
-        ws_name = workspace_names[i]
-        click.echo(f"Scanning workspace: {workspace_directory}")
+    # Collect repos from each workspace in parallel
+    def process_workspace(ws_index: int) -> tuple[str, dict[str, str]]:
+        workspace_directory = workspace_directories[ws_index]
+        ws_name = workspace_names[ws_index]
         source_repos = get_workspace_repos(workspace_directory)
 
-        if fetch:
-            for repo_name in source_repos:
-                for remote in source_repos[repo_name].remotes:
+        if fetch and source_repos:
+            # Fetch in parallel within workspace
+            def fetch_repo(repo: Repo) -> None:
+                for remote in repo.remotes:
                     remote.fetch()
 
-        repos_by_workspace[ws_name] = {}
-        for repo_name in source_repos:
-            repo = source_repos[repo_name]
-            branch = get_repo_head_ref(repo, verbose)
-            status_str = get_status_repo(repo)
+            with ThreadPoolExecutor(max_workers=min(len(source_repos), 4)) as executor:
+                executor.map(fetch_repo, source_repos.values())
+
+        # Get repo info in parallel
+        repo_info = get_repo_info_parallel(source_repos, include_status=True, include_time=show_time)
+
+        ws_repos = {}
+        for repo_name in repo_info:
+            info = repo_info[repo_name]
+            branch = info["head_ref"]
+            status_str = info["status"]
 
             # Format: "branch (status)" or just "branch" if clean
             if status_str:
@@ -681,9 +698,17 @@ def compare_workspaces(
                 display_value = branch
 
             if show_time:
-                display_value += f" ({get_elapsed_time_repo(repo)})"
+                display_value += f" ({info['elapsed_time']})"
 
-            repos_by_workspace[ws_name][repo_name] = display_value
+            ws_repos[repo_name] = display_value
+
+        return ws_name, ws_repos
+
+    # Process workspaces (can be parallelized for multiple workspaces)
+    for i, workspace_directory in enumerate(workspace_directories):
+        click.echo(f"Scanning workspace: {workspace_directory}")
+        ws_name, ws_repos = process_workspace(i)
+        repos_by_workspace[ws_name] = ws_repos
 
     show_repos_config_versions(repos_by_workspace, full)
 
