@@ -18,6 +18,7 @@ from textual.widgets import (
     Static,
 )
 from textual.widgets.option_list import Option
+from textual.worker import Worker, WorkerState
 
 from git import Repo
 
@@ -204,6 +205,9 @@ class BranchSelectScreen(ModalScreen[str | None]):
                 option_list.add_option(Option(f"  {display_name}", id=ref_name))
                 added_refs.add(display_name)
 
+        # Highlight the current branch (first item)
+        option_list.highlighted = 0
+
     def action_cancel(self) -> None:
         """Cancel branch selection."""
         self.dismiss(None)
@@ -340,6 +344,10 @@ class WCheckTUI(App[None]):
     def _populate_table(self) -> None:
         """Populate or refresh the repository table."""
         table = self.query_one("#repo-table", DataTable)
+        
+        # Save cursor position
+        saved_cursor_row = table.cursor_row
+        
         table.clear()
 
         for repo_name in sorted(self.repos.keys()):
@@ -363,6 +371,10 @@ class WCheckTUI(App[None]):
 
             row_data.append(output)
             table.add_row(*row_data, key=repo_name)
+
+        # Restore cursor position
+        if saved_cursor_row is not None and saved_cursor_row < table.row_count:
+            table.move_cursor(row=saved_cursor_row)
 
     def _get_selected_repo(self) -> tuple[str, Repo] | None:
         """Get the currently selected repository.
@@ -461,8 +473,16 @@ class WCheckTUI(App[None]):
             self.notify(f"No remotes configured for {repo_name}", severity="warning")
             return
 
+        self._set_output(repo_name, "[dim]Fetching...[/dim]")
+        self.run_worker(
+            lambda: self._do_fetch(repo_name, repo),
+            name=f"fetch_{repo_name}",
+            thread=True,
+        )
+
+    def _do_fetch(self, repo_name: str, repo: Repo) -> dict:
+        """Perform fetch operation in background."""
         try:
-            self._set_output(repo_name, "[dim]Fetching...[/dim]")
             results = []
             for remote in repo.remotes:
                 fetch_info = remote.fetch()
@@ -471,18 +491,9 @@ class WCheckTUI(App[None]):
                         results.append(f"new: {info.name}")
                     elif info.flags & info.FAST_FORWARD:
                         results.append(f"ff: {info.name}")
-
-            if results:
-                self._set_output(
-                    repo_name, f"[green]Fetched: {', '.join(results[:2])}[/green]"
-                )
-            else:
-                self._set_output(repo_name, "[green]Up to date[/green]")
-            self._populate_table()
-            self.notify(f"Fetched {repo_name}")
+            return {"repo_name": repo_name, "success": True, "results": results}
         except Exception as e:
-            self._set_output(repo_name, f"[red]Fetch error: {str(e)[:20]}[/red]")
-            self.notify(f"Fetch failed: {e}", severity="error")
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
 
     def action_pull(self) -> None:
         """Pull from remote for the selected repository."""
@@ -505,28 +516,28 @@ class WCheckTUI(App[None]):
             )
             return
 
+        self._set_output(repo_name, "[dim]Pulling...[/dim]")
+        self.run_worker(
+            lambda: self._do_pull(repo_name, repo),
+            name=f"pull_{repo_name}",
+            thread=True,
+        )
+
+    def _do_pull(self, repo_name: str, repo: Repo) -> dict:
+        """Perform pull operation in background."""
         try:
-            self._set_output(repo_name, "[dim]Pulling...[/dim]")
             origin = repo.remotes[0]
             pull_info = origin.pull()
-
+            result = "Pulled"
             if pull_info:
                 info = pull_info[0]
                 if info.flags & info.FAST_FORWARD:
-                    self._set_output(repo_name, "[green]Pulled (ff)[/green]")
+                    result = "Pulled (ff)"
                 elif info.flags & info.HEAD_UPTODATE:
-                    self._set_output(repo_name, "[green]Already up to date[/green]")
-                else:
-                    self._set_output(repo_name, "[green]Pulled[/green]")
-            else:
-                self._set_output(repo_name, "[green]Pulled[/green]")
-
-            self._populate_table()
-            self.notify(f"Pulled {repo_name}")
+                    result = "Already up to date"
+            return {"repo_name": repo_name, "success": True, "result": result}
         except Exception as e:
-            error_msg = str(e)[:25]
-            self._set_output(repo_name, f"[red]Pull error: {error_msg}[/red]")
-            self.notify(f"Pull failed: {e}", severity="error")
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
 
     def action_push(self) -> None:
         """Push to remote for the selected repository."""
@@ -549,64 +560,106 @@ class WCheckTUI(App[None]):
             )
             return
 
+        self._set_output(repo_name, "[dim]Pushing...[/dim]")
+        self.run_worker(
+            lambda: self._do_push(repo_name, repo),
+            name=f"push_{repo_name}",
+            thread=True,
+        )
+
+    def _do_push(self, repo_name: str, repo: Repo) -> dict:
+        """Perform push operation in background."""
         try:
-            self._set_output(repo_name, "[dim]Pushing...[/dim]")
             origin = repo.remotes[0]
             push_info = origin.push()
-
+            result = "Pushed"
             if push_info:
                 info = push_info[0]
                 if info.flags & info.UP_TO_DATE:
-                    self._set_output(repo_name, "[green]Already up to date[/green]")
+                    result = "Already up to date"
                 elif info.flags & info.REJECTED:
-                    self._set_output(repo_name, "[red]Push rejected[/red]")
+                    return {"repo_name": repo_name, "success": False, "error": "Push rejected"}
                 elif info.flags & info.ERROR:
-                    self._set_output(repo_name, "[red]Push error[/red]")
-                else:
-                    self._set_output(repo_name, "[green]Pushed[/green]")
-            else:
-                self._set_output(repo_name, "[green]Pushed[/green]")
-
-            self._populate_table()
-            self.notify(f"Pushed {repo_name}")
+                    return {"repo_name": repo_name, "success": False, "error": "Push error"}
+            return {"repo_name": repo_name, "success": True, "result": result}
         except Exception as e:
-            error_msg = str(e)[:25]
-            self._set_output(repo_name, f"[red]Push error: {error_msg}[/red]")
-            self.notify(f"Push failed: {e}", severity="error")
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Handle worker completion."""
+        if event.state == WorkerState.SUCCESS and event.worker.result:
+            result = event.worker.result
+            
+            # Handle fetch_all separately
+            if result.get("fetch_all"):
+                for repo_name, msg in result.get("results", {}).items():
+                    self.output_messages[repo_name] = msg
+                self._populate_table()
+                self.notify("Fetched all repositories")
+                return
+            
+            repo_name = result.get("repo_name", "")
+            if result.get("success"):
+                # Handle fetch results
+                if "results" in result:
+                    results = result["results"]
+                    if results:
+                        self._set_output(repo_name, f"[green]Fetched: {', '.join(results[:2])}[/green]")
+                    else:
+                        self._set_output(repo_name, "[green]Up to date[/green]")
+                    self.notify(f"Fetched {repo_name}")
+                # Handle pull/push results
+                elif "result" in result:
+                    self._set_output(repo_name, f"[green]{result['result']}[/green]")
+                    action = "Pulled" if "pull" in (event.worker.name or "") else "Pushed"
+                    self.notify(f"{action} {repo_name}")
+            else:
+                error = result.get("error", "Unknown error")[:25]
+                self._set_output(repo_name, f"[red]Error: {error}[/red]")
+                self.notify(f"Operation failed: {error}", severity="error")
 
     def action_fetch_all(self) -> None:
         """Fetch all remotes for all repositories."""
         self.notify("Fetching all repositories...")
 
+        # Mark all repos as fetching
+        for repo_name in self.repos.keys():
+            if self.repos[repo_name].remotes:
+                self.output_messages[repo_name] = "[dim]Fetching...[/dim]"
+            else:
+                self.output_messages[repo_name] = "[yellow]No remotes[/yellow]"
+        self._populate_table()
+
+        self.run_worker(self._do_fetch_all, name="fetch_all", thread=True)
+
+    def _do_fetch_all(self) -> dict:
+        """Perform fetch all operation in background."""
+        results = {}
         for repo_name in sorted(self.repos.keys()):
             repo = self.repos[repo_name]
 
             if not repo.remotes:
-                self.output_messages[repo_name] = "[yellow]No remotes[/yellow]"
+                results[repo_name] = "[yellow]No remotes[/yellow]"
                 continue
 
             try:
-                self.output_messages[repo_name] = "[dim]Fetching...[/dim]"
-                results = []
+                fetch_results = []
                 for remote in repo.remotes:
                     fetch_info = remote.fetch()
                     for info in fetch_info:
                         if info.flags & info.NEW_HEAD:
-                            results.append("new")
+                            fetch_results.append("new")
                         elif info.flags & info.FAST_FORWARD:
-                            results.append("ff")
+                            fetch_results.append("ff")
 
-                if results:
-                    self.output_messages[repo_name] = (
-                        f"[green]Fetched ({len(results)} refs)[/green]"
-                    )
+                if fetch_results:
+                    results[repo_name] = f"[green]Fetched ({len(fetch_results)} refs)[/green]"
                 else:
-                    self.output_messages[repo_name] = "[green]Up to date[/green]"
+                    results[repo_name] = "[green]Up to date[/green]"
             except Exception as e:
-                self.output_messages[repo_name] = f"[red]Error: {str(e)[:15]}[/red]"
+                results[repo_name] = f"[red]Error: {str(e)[:15]}[/red]"
 
-        self._populate_table()
-        self.notify("Fetched all repositories")
+        return {"fetch_all": True, "results": results}
 
 
 def show_tui(
