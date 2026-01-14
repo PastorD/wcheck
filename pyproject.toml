@@ -1,6 +1,6 @@
 [project]
 name = "wcheck"
-version = "0.5.0"
+version = "0.6.0"
 description = "Manage a workspace of git repositories"
 authors = [
     {name= "Daniel Pastor", email="danpasmor@gmail.com"}
