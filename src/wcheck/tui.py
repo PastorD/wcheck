@@ -7,7 +7,7 @@ from typing import NoReturn
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import (
     DataTable,
@@ -18,6 +18,7 @@ from textual.widgets import (
     Static,
 )
 from textual.widgets.option_list import Option
+from textual.worker import Worker, WorkerState
 
 from git import Repo
 
@@ -78,6 +79,61 @@ def get_repo_status_indicator(repo: Repo) -> str:
         return "[green]○[/green]"  # Clean
 
 
+def get_ahead_behind(repo: Repo) -> tuple[int, int]:
+    """Get commits ahead and behind remote tracking branch.
+
+    Args:
+        repo: Git repository object.
+
+    Returns:
+        Tuple of (ahead, behind) commit counts.
+    """
+    try:
+        _ = repo.head.commit
+    except ValueError:
+        return 0, 0
+
+    if repo.head.is_detached or not repo.remotes:
+        return 0, 0
+
+    try:
+        branch = repo.active_branch
+        tracking = branch.tracking_branch()
+
+        if tracking is None:
+            return 0, 0
+
+        # Commits ahead (local commits not in remote)
+        ahead = sum(1 for _ in repo.iter_commits(f"{tracking.name}..{branch.name}"))
+
+        # Commits behind (remote commits not in local)
+        behind = sum(1 for _ in repo.iter_commits(f"{branch.name}..{tracking.name}"))
+
+        return ahead, behind
+    except Exception:
+        return 0, 0
+
+
+def format_sync_status(ahead: int, behind: int) -> str:
+    """Format ahead/behind status for display.
+
+    Args:
+        ahead: Number of commits ahead.
+        behind: Number of commits behind.
+
+    Returns:
+        Formatted string showing sync status.
+    """
+    if ahead == 0 and behind == 0:
+        return "[green]✓[/green]"
+    parts = []
+    if ahead > 0:
+        parts.append(f"[cyan]↑{ahead}[/cyan]")
+    if behind > 0:
+        parts.append(f"[magenta]↓{behind}[/magenta]")
+    return " ".join(parts)
+
+
 class BranchSelectScreen(ModalScreen[str | None]):
     """Modal screen for selecting a branch to checkout.
 
@@ -115,7 +171,10 @@ class BranchSelectScreen(ModalScreen[str | None]):
         yield Vertical(
             Label(f"Select branch for [bold]{self.repo_name}[/bold]", id="title"),
             OptionList(id="branch-list"),
-            Static("Press [bold]Enter[/bold] to checkout, [bold]Escape[/bold] to cancel", id="help"),
+            Static(
+                "Press [bold]Enter[/bold] to checkout, [bold]Escape[/bold] to cancel",
+                id="help",
+            ),
             id="branch-dialog",
         )
 
@@ -124,12 +183,19 @@ class BranchSelectScreen(ModalScreen[str | None]):
         option_list = self.query_one("#branch-list", OptionList)
 
         # Add current branch first (marked)
-        option_list.add_option(Option(f"● {self.current_branch} (current)", id=self.current_branch))
+        option_list.add_option(
+            Option(f"● {self.current_branch} (current)", id=self.current_branch)
+        )
 
-        # Add other branches and tags
-        added_refs = {self.current_branch}
+        # Add other branches and tags, filtering out HEAD
+        added_refs = {self.current_branch, "HEAD"}
         for ref in self.repo.references:
             ref_name = ref.name
+
+            # Skip HEAD references
+            if ref_name == "HEAD" or ref_name.endswith("/HEAD"):
+                continue
+
             # Strip origin/ prefix for display but keep for identification
             display_name = ref_name
             if ref_name.startswith("origin/"):
@@ -138,6 +204,9 @@ class BranchSelectScreen(ModalScreen[str | None]):
             if display_name not in added_refs:
                 option_list.add_option(Option(f"  {display_name}", id=ref_name))
                 added_refs.add(display_name)
+
+        # Highlight the current branch (first item)
+        option_list.highlighted = 0
 
     def action_cancel(self) -> None:
         """Cancel branch selection."""
@@ -173,6 +242,7 @@ class WCheckTUI(App[None]):
         repos: Dictionary mapping repository names to Repo objects.
         config_file_path: Path to the configuration file.
         config_repo: Dictionary mapping repository names to their configured versions.
+        output_messages: Dictionary storing output messages for each repo.
     """
 
     CSS = """
@@ -219,9 +289,13 @@ class WCheckTUI(App[None]):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("b", "select_branch", "Select Branch"),
-        Binding("e", "open_editor", "Open Editor"),
+        Binding("b", "select_branch", "Branch"),
+        Binding("e", "open_editor", "Editor"),
         Binding("r", "refresh", "Refresh"),
+        Binding("f", "fetch", "Fetch"),
+        Binding("p", "pull", "Pull"),
+        Binding("P", "push", "Push"),
+        Binding("F", "fetch_all", "Fetch All"),
     ]
 
     def __init__(
@@ -241,6 +315,7 @@ class WCheckTUI(App[None]):
         self.repos = repos
         self.config_file_path = config_file_path
         self.config_repo = config_repo
+        self.output_messages: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         """Compose the main UI layout."""
@@ -257,24 +332,33 @@ class WCheckTUI(App[None]):
 
         # Add columns
         table.add_column("Status", key="status", width=6)
-        table.add_column("Repository", key="repo", width=30)
-        table.add_column("Branch", key="branch", width=30)
+        table.add_column("Repository", key="repo", width=25)
+        table.add_column("Branch", key="branch", width=25)
+        table.add_column("Sync", key="sync", width=10)
         if self.config_repo is not None:
-            table.add_column("Config Version", key="config", width=20)
+            table.add_column("Config", key="config", width=15)
+        table.add_column("Output", key="output", width=35)
 
         self._populate_table()
 
     def _populate_table(self) -> None:
         """Populate or refresh the repository table."""
         table = self.query_one("#repo-table", DataTable)
+        
+        # Save cursor position
+        saved_cursor_row = table.cursor_row
+        
         table.clear()
 
         for repo_name in sorted(self.repos.keys()):
             repo = self.repos[repo_name]
             status = get_repo_status_indicator(repo)
             branch = get_repo_head_ref(repo)
+            ahead, behind = get_ahead_behind(repo)
+            sync_status = format_sync_status(ahead, behind)
+            output = self.output_messages.get(repo_name, "")
 
-            row_data = [status, repo_name, branch]
+            row_data = [status, repo_name, branch, sync_status]
 
             if self.config_repo is not None:
                 if repo_name in self.config_repo:
@@ -285,7 +369,12 @@ class WCheckTUI(App[None]):
                     config_version = "[dim]N/A[/dim]"
                 row_data.append(config_version)
 
+            row_data.append(output)
             table.add_row(*row_data, key=repo_name)
+
+        # Restore cursor position
+        if saved_cursor_row is not None and saved_cursor_row < table.row_count:
+            table.move_cursor(row=saved_cursor_row)
 
     def _get_selected_repo(self) -> tuple[str, Repo] | None:
         """Get the currently selected repository.
@@ -301,6 +390,16 @@ class WCheckTUI(App[None]):
             if repo_name in self.repos:
                 return repo_name, self.repos[repo_name]
         return None
+
+    def _set_output(self, repo_name: str, message: str) -> None:
+        """Set output message for a repository and refresh table.
+
+        Args:
+            repo_name: Name of the repository.
+            message: Output message to display.
+        """
+        self.output_messages[repo_name] = message
+        self._populate_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection (Enter key) on the DataTable."""
@@ -325,9 +424,10 @@ class WCheckTUI(App[None]):
                     checkout_branch = checkout_branch.replace("origin/", "", 1)
                 try:
                     repo.git.checkout(checkout_branch)
-                    self._populate_table()
+                    self._set_output(repo_name, f"[green]→ {checkout_branch}[/green]")
                     self.notify(f"Checked out {checkout_branch} in {repo_name}")
                 except Exception as e:
+                    self._set_output(repo_name, f"[red]Error: {str(e)[:25]}[/red]")
                     self.notify(f"Checkout failed: {e}", severity="error")
 
         self.push_screen(
@@ -348,14 +448,218 @@ class WCheckTUI(App[None]):
 
         try:
             subprocess.Popen([editor_command, repo_path])
+            self._set_output(repo_name, f"[blue]Opened in {editor_command}[/blue]")
             self.notify(f"Opened {repo_name} in {editor_command}")
         except Exception as e:
+            self._set_output(repo_name, "[red]Editor error[/red]")
             self.notify(f"Failed to open editor: {e}", severity="error")
 
     def action_refresh(self) -> None:
         """Refresh the repository table."""
         self._populate_table()
         self.notify("Refreshed")
+
+    def action_fetch(self) -> None:
+        """Fetch from remote for the selected repository."""
+        selected = self._get_selected_repo()
+        if selected is None:
+            self.notify("No repository selected", severity="warning")
+            return
+
+        repo_name, repo = selected
+
+        if not repo.remotes:
+            self._set_output(repo_name, "[yellow]No remotes[/yellow]")
+            self.notify(f"No remotes configured for {repo_name}", severity="warning")
+            return
+
+        self._set_output(repo_name, "[dim]Fetching...[/dim]")
+        self.run_worker(
+            lambda: self._do_fetch(repo_name, repo),
+            name=f"fetch_{repo_name}",
+            thread=True,
+        )
+
+    def _do_fetch(self, repo_name: str, repo: Repo) -> dict:
+        """Perform fetch operation in background."""
+        try:
+            results = []
+            for remote in repo.remotes:
+                fetch_info = remote.fetch()
+                for info in fetch_info:
+                    if info.flags & info.NEW_HEAD:
+                        results.append(f"new: {info.name}")
+                    elif info.flags & info.FAST_FORWARD:
+                        results.append(f"ff: {info.name}")
+            return {"repo_name": repo_name, "success": True, "results": results}
+        except Exception as e:
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
+
+    def action_pull(self) -> None:
+        """Pull from remote for the selected repository."""
+        selected = self._get_selected_repo()
+        if selected is None:
+            self.notify("No repository selected", severity="warning")
+            return
+
+        repo_name, repo = selected
+
+        if not repo.remotes:
+            self._set_output(repo_name, "[yellow]No remotes[/yellow]")
+            self.notify(f"No remotes configured for {repo_name}", severity="warning")
+            return
+
+        if repo.head.is_detached:
+            self._set_output(repo_name, "[yellow]Detached HEAD[/yellow]")
+            self.notify(
+                f"Cannot pull: detached HEAD in {repo_name}", severity="warning"
+            )
+            return
+
+        self._set_output(repo_name, "[dim]Pulling...[/dim]")
+        self.run_worker(
+            lambda: self._do_pull(repo_name, repo),
+            name=f"pull_{repo_name}",
+            thread=True,
+        )
+
+    def _do_pull(self, repo_name: str, repo: Repo) -> dict:
+        """Perform pull operation in background."""
+        try:
+            origin = repo.remotes[0]
+            pull_info = origin.pull()
+            result = "Pulled"
+            if pull_info:
+                info = pull_info[0]
+                if info.flags & info.FAST_FORWARD:
+                    result = "Pulled (ff)"
+                elif info.flags & info.HEAD_UPTODATE:
+                    result = "Already up to date"
+            return {"repo_name": repo_name, "success": True, "result": result}
+        except Exception as e:
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
+
+    def action_push(self) -> None:
+        """Push to remote for the selected repository."""
+        selected = self._get_selected_repo()
+        if selected is None:
+            self.notify("No repository selected", severity="warning")
+            return
+
+        repo_name, repo = selected
+
+        if not repo.remotes:
+            self._set_output(repo_name, "[yellow]No remotes[/yellow]")
+            self.notify(f"No remotes configured for {repo_name}", severity="warning")
+            return
+
+        if repo.head.is_detached:
+            self._set_output(repo_name, "[yellow]Detached HEAD[/yellow]")
+            self.notify(
+                f"Cannot push: detached HEAD in {repo_name}", severity="warning"
+            )
+            return
+
+        self._set_output(repo_name, "[dim]Pushing...[/dim]")
+        self.run_worker(
+            lambda: self._do_push(repo_name, repo),
+            name=f"push_{repo_name}",
+            thread=True,
+        )
+
+    def _do_push(self, repo_name: str, repo: Repo) -> dict:
+        """Perform push operation in background."""
+        try:
+            origin = repo.remotes[0]
+            push_info = origin.push()
+            result = "Pushed"
+            if push_info:
+                info = push_info[0]
+                if info.flags & info.UP_TO_DATE:
+                    result = "Already up to date"
+                elif info.flags & info.REJECTED:
+                    return {"repo_name": repo_name, "success": False, "error": "Push rejected"}
+                elif info.flags & info.ERROR:
+                    return {"repo_name": repo_name, "success": False, "error": "Push error"}
+            return {"repo_name": repo_name, "success": True, "result": result}
+        except Exception as e:
+            return {"repo_name": repo_name, "success": False, "error": str(e)}
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Handle worker completion."""
+        if event.state == WorkerState.SUCCESS and event.worker.result:
+            result = event.worker.result
+            
+            # Handle fetch_all separately
+            if result.get("fetch_all"):
+                for repo_name, msg in result.get("results", {}).items():
+                    self.output_messages[repo_name] = msg
+                self._populate_table()
+                self.notify("Fetched all repositories")
+                return
+            
+            repo_name = result.get("repo_name", "")
+            if result.get("success"):
+                # Handle fetch results
+                if "results" in result:
+                    results = result["results"]
+                    if results:
+                        self._set_output(repo_name, f"[green]Fetched: {', '.join(results[:2])}[/green]")
+                    else:
+                        self._set_output(repo_name, "[green]Up to date[/green]")
+                    self.notify(f"Fetched {repo_name}")
+                # Handle pull/push results
+                elif "result" in result:
+                    self._set_output(repo_name, f"[green]{result['result']}[/green]")
+                    action = "Pulled" if "pull" in (event.worker.name or "") else "Pushed"
+                    self.notify(f"{action} {repo_name}")
+            else:
+                error = result.get("error", "Unknown error")[:25]
+                self._set_output(repo_name, f"[red]Error: {error}[/red]")
+                self.notify(f"Operation failed: {error}", severity="error")
+
+    def action_fetch_all(self) -> None:
+        """Fetch all remotes for all repositories."""
+        self.notify("Fetching all repositories...")
+
+        # Mark all repos as fetching
+        for repo_name in self.repos.keys():
+            if self.repos[repo_name].remotes:
+                self.output_messages[repo_name] = "[dim]Fetching...[/dim]"
+            else:
+                self.output_messages[repo_name] = "[yellow]No remotes[/yellow]"
+        self._populate_table()
+
+        self.run_worker(self._do_fetch_all, name="fetch_all", thread=True)
+
+    def _do_fetch_all(self) -> dict:
+        """Perform fetch all operation in background."""
+        results = {}
+        for repo_name in sorted(self.repos.keys()):
+            repo = self.repos[repo_name]
+
+            if not repo.remotes:
+                results[repo_name] = "[yellow]No remotes[/yellow]"
+                continue
+
+            try:
+                fetch_results = []
+                for remote in repo.remotes:
+                    fetch_info = remote.fetch()
+                    for info in fetch_info:
+                        if info.flags & info.NEW_HEAD:
+                            fetch_results.append("new")
+                        elif info.flags & info.FAST_FORWARD:
+                            fetch_results.append("ff")
+
+                if fetch_results:
+                    results[repo_name] = f"[green]Fetched ({len(fetch_results)} refs)[/green]"
+                else:
+                    results[repo_name] = "[green]Up to date[/green]"
+            except Exception as e:
+                results[repo_name] = f"[red]Error: {str(e)[:15]}[/red]"
+
+        return {"fetch_all": True, "results": results}
 
 
 def show_tui(
