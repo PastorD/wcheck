@@ -27,33 +27,12 @@ wcheck status --tui
 
 ## Getting Started
 
-<div class="grid cards" markdown>
-
--   :material-download: **[Installation](installation.md)**
-
-    ---
-
-    Install wcheck using uv or pip, with optional GUI/TUI support
-
--   :material-rocket-launch: **[Quick Start](quickstart.md)**
-
-    ---
-
-    Get started with basic commands in minutes
-
--   :material-console: **[CLI Reference](cli.md)**
-
-    ---
-
-    Complete documentation for all commands and options
-
--   :material-file-cog: **[Configuration](configuration.md)**
-
-    ---
-
-    Learn about YAML configuration file format
-
-</div>
+| | |
+|---|---|
+| 📥 **[Installation](installation.md)** | Install wcheck using uv or pip, with optional GUI/TUI support |
+| 🚀 **[Quick Start](quickstart.md)** | Get started with basic commands in minutes |
+| 💻 **[CLI Reference](cli.md)** | Complete documentation for all commands and options |
+| 📄 **[Configuration](configuration.md)** | Learn about YAML configuration file format |
 
 ## License
 
